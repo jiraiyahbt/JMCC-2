@@ -1,4 +1,17 @@
-<?php $title = 'Visitor pass reference · SafeGate'; ?>
+<?php
+$title = 'Visitor pass reference · SafeGate';
+$visit = array_merge([
+  'visit_id' => '',
+  'pass_reference' => '',
+  'visitor_name' => '',
+  'destination' => '',
+  'purpose' => '',
+  'entrance_name' => '',
+  'entry_time' => '',
+  'status' => 'Unknown',
+], is_array($visit ?? null) ? $visit : []);
+$qrValue = (string) (($visit['pass_reference'] ?? '') ?: ($visit['visit_id'] ?? ''));
+?>
 <section class="narrow-page">
   <a class="back-link" href="/guard">← Back to visitor log</a>
   <p class="eyebrow">Visitor pass reference</p>
@@ -8,7 +21,11 @@
       <p><?= h($visit['status']) ?></p>
     </div>
     <div class="pass-body">
-      <div id="visitorQr" aria-label="QR reference"></div>
+      <?php if ($qrValue !== ''): ?>
+        <div id="visitorQr" aria-label="QR reference"></div>
+      <?php else: ?>
+        <p class="notice">QR reference is unavailable for this visit.</p>
+      <?php endif; ?>
       <p><strong><?= h($visit['pass_reference'] ?: 'Pass reference pending') ?></strong></p>
       <div class="detail-grid">
         <dt>Visitor</dt><dd><?= h($visit['visitor_name']) ?></dd>
@@ -23,9 +40,10 @@
 </section>
 <script>
 window.addEventListener("DOMContentLoaded", function () {
-  if (window.QRCode) {
+  const target = document.getElementById("visitorQr");
+  if (target && window.QRCode) {
     new QRCode(document.getElementById("visitorQr"), {
-      text: <?= json_encode((string) ($visit['pass_reference'] ?: $visit['visit_id']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+      text: <?= json_encode($qrValue, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
       width: 220,
       height: 220
     });

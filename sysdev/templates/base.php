@@ -17,7 +17,7 @@
   <header class="topbar">
     <a class="brand" href="/"><span class="brand-mark">S</span><span>SafeGate</span></a>
     <nav class="topnav" aria-label="Main navigation">
-      <?php if ($user): ?>
+      <?php if (isset($user) && $user): ?>
         <?php if ($user['role'] === 'Administrator'): ?>
           <a href="/admin/records">Visitor records</a>
           <a href="/admin/users">User accounts</a>
@@ -46,7 +46,7 @@
         <?php endforeach; ?>
       </section>
     <?php endif; ?>
-    <?= $content ?>
+    <?= $content ?? '' ?>
   </main>
   <footer class="site-footer">
     <span>SafeGate · Guard-operated visitor log</span>

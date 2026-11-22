@@ -3,7 +3,7 @@
   <div><p class="eyebrow">Administration / audit log</p><h1>Recent security activity</h1><p class="muted">The latest 200 account and visitor workflow events.</p></div>
 </section>
 <section class="card table-card">
-  <?php if ($entries): ?>
+  <?php if (!empty($entries)): ?>
     <div class="table-wrap"><table>
       <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Record</th><th>Details</th><th>IP address</th></tr></thead>
       <tbody>

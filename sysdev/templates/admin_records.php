@@ -1,4 +1,19 @@
-<?php $title = 'Visitor records · SafeGate'; ?>
+<?php
+$title = 'Visitor records · SafeGate';
+$filters = array_merge([
+  'q' => '',
+  'visit_date' => '',
+  'status' => '',
+  'entrance' => '',
+], $filters ?? []);
+$entrances = $entrances ?? [];
+$records = $records ?? [];
+$totals = $totals ?? [];
+$today = $today ?? date('F j, Y');
+$page = $page ?? 1;
+$total_pages = $total_pages ?? 1;
+$total_records = $total_records ?? count($records);
+?>
 <section class="page-heading">
   <div><p class="eyebrow">Administration / visitor records</p><h1>Every visit, in one place.</h1><p class="muted">Review guard-entered check-in and check-out records.</p></div>
   <a class="button button-primary" href="<?= h(url('/admin/records.csv', $filters)) ?>">Export filtered records</a>

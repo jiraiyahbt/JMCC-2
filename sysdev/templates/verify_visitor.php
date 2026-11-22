@@ -1,4 +1,21 @@
-<?php $title = 'Check in visitor · SafeGate'; $scannerPage = true; ?>
+<?php
+$title = 'Check in visitor · SafeGate';
+$scannerPage = true;
+$entrances = isset($entrances) && is_array($entrances) && $entrances ? $entrances : ENTRANCES;
+$selectedEntrance = $entrance ?? null;
+$entrance = in_array($selectedEntrance, $entrances, true)
+  ? $selectedEntrance
+  : ($entrances[0] ?? ENTRANCES[0]);
+$existingFormData = isset($form_data) && is_array($form_data) ? $form_data : [];
+$form_data = array_merge([
+  'visitor_name' => '',
+  'mobile_number' => '',
+  'destination' => '',
+  'purpose' => '',
+], $existingFormData);
+$errors = isset($errors) && is_array($errors) ? $errors : [];
+$duplicates = isset($duplicates) && is_array($duplicates) ? $duplicates : [];
+?>
 <section class="narrow-page wide-narrow">
   <a class="back-link" href="<?= h(url('/guard', ['entrance' => $entrance])) ?>">← Back to visitor log</a>
   <p class="eyebrow">Gate operations / check in</p>
@@ -22,10 +39,10 @@
     <input type="hidden" name="action" value="check_in">
     <h2>Review and record visit</h2>
     <p class="muted">OCR suggestions can be incorrect. Verify them against the ID. The person/office and purpose are not on the ID, so the guard must enter those.</p>
-    <label>Visitor name<input id="visitorName" name="visitor_name" maxlength="120" required autocomplete="off" value="<?= h($form_data['visitor_name'] ?? '') ?>"></label>
-    <label>Mobile number <span class="muted">(optional)</span><input id="mobileNumber" name="mobile_number" maxlength="20" autocomplete="tel" value="<?= h($form_data['mobile_number'] ?? '') ?>"></label>
-    <label>Person or office visited<input name="destination" maxlength="100" required value="<?= h($form_data['destination'] ?? '') ?>" autocomplete="off"></label>
-    <label>Purpose of visit<input name="purpose" maxlength="255" required value="<?= h($form_data['purpose'] ?? '') ?>" autocomplete="off"></label>
+    <label>Visitor name<input id="visitorName" name="visitor_name" maxlength="120" required autocomplete="off" value="<?= h($form_data['visitor_name']) ?>"></label>
+    <label>Mobile number <span class="muted">(optional)</span><input id="mobileNumber" name="mobile_number" maxlength="20" autocomplete="tel" value="<?= h($form_data['mobile_number']) ?>"></label>
+    <label>Person or office visited<input name="destination" maxlength="100" required value="<?= h($form_data['destination']) ?>" autocomplete="off"></label>
+    <label>Purpose of visit<input name="purpose" maxlength="255" required value="<?= h($form_data['purpose']) ?>" autocomplete="off"></label>
     <label>Entrance<select name="entrance" required><?php foreach (($entrances ?? [$entrance]) as $item): ?><option value="<?= h($item) ?>" <?= $item === $entrance ? 'selected' : '' ?>><?= h($item) ?></option><?php endforeach; ?></select></label>
     <?php if (!empty($duplicates)): ?>
       <div class="notice">

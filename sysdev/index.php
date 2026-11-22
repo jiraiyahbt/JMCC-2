@@ -551,35 +551,6 @@ if (PHP_SAPI !== 'cli') {
             flash('error', "Confirm that the visitor has returned the school's pass and left campus.");
             redirect_to(url('/guard', ['entrance' => $entrance]));
         }
-
-        if (preg_match('#^/guard/visits/(\d+)/pass$#', $path, $matches) && $method === 'GET') {
-            require_login('Security Guard');
-            $statement = db()->prepare(
-                'SELECT visit_id, pass_reference, visitor_name, destination, purpose,
-                        entrance_name, entry_time, status
-                 FROM visitor_log_entries WHERE visit_id = ?'
-            );
-            $statement->execute([(int) $matches[1]]);
-            $visit = $statement->fetch();
-            if (!$visit) {
-                fail(404, 'The visitor pass record could not be found.');
-            }
-            render('visitor_pass', ['visit' => $visit, 'passPage' => true]);
-        }
-
-        if ($path === '/guard/visitor-history' && $method === 'GET') {
-            require_login('Security Guard');
-            $name = trim((string) ($_GET['name'] ?? ''));
-            $mobile = trim((string) ($_GET['mobile'] ?? ''));
-            $history = $name !== ''
-                ? visitor_history($name, $mobile !== '' ? $mobile : null)
-                : [];
-            render('visitor_history', [
-                'name' => $name,
-                'mobile' => $mobile,
-                'history' => $history,
-            ]);
-        }
         $statement = db()->prepare(
             "UPDATE visitor_log_entries
              SET status = 'Exited', exit_time = ?, exit_guard_id = ?, exit_entrance_name = ?
@@ -598,6 +569,35 @@ if (PHP_SAPI !== 'cli') {
             flash('success', 'Visitor checkout recorded.');
         }
         redirect_to(url('/guard', ['entrance' => $entrance]));
+    }
+
+    if (preg_match('#^/guard/visits/(\d+)/pass$#', $path, $matches) && $method === 'GET') {
+        require_login('Security Guard');
+        $statement = db()->prepare(
+            'SELECT visit_id, pass_reference, visitor_name, destination, purpose,
+                    entrance_name, entry_time, status
+             FROM visitor_log_entries WHERE visit_id = ?'
+        );
+        $statement->execute([(int) $matches[1]]);
+        $visit = $statement->fetch();
+        if (!$visit) {
+            fail(404, 'The visitor pass record could not be found.');
+        }
+        render('visitor_pass', ['visit' => $visit, 'passPage' => true]);
+    }
+
+    if ($path === '/guard/visitor-history' && $method === 'GET') {
+        require_login('Security Guard');
+        $name = trim((string) ($_GET['name'] ?? ''));
+        $mobile = trim((string) ($_GET['mobile'] ?? ''));
+        $history = $name !== ''
+            ? visitor_history($name, $mobile !== '' ? $mobile : null)
+            : [];
+        render('visitor_history', [
+            'name' => $name,
+            'mobile' => $mobile,
+            'history' => $history,
+        ]);
     }
 
     if ($path === '/admin' && $method === 'GET') {

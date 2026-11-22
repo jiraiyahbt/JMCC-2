@@ -1,4 +1,16 @@
-<?php $title = 'Visitor log · SafeGate'; ?>
+<?php
+$title = 'Visitor log · SafeGate';
+$today = $today ?? date('Y-m-d');
+$entrance = $entrance ?? ENTRANCES[0];
+$entrances = isset($entrances) && is_array($entrances) ? $entrances : ENTRANCES;
+$stats = array_merge([
+  'inside' => 0,
+  'visits' => 0,
+  'exited' => 0,
+  'long_stays' => 0,
+], isset($stats) && is_array($stats) ? $stats : []);
+$visits = isset($visits) && is_array($visits) ? $visits : [];
+?>
 <section class="page-heading">
   <div>
     <p class="eyebrow">Gate operations / today</p>
