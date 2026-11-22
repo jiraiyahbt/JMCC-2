@@ -1,12 +1,13 @@
 # SafeGate
 
-SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a phone or tablet camera to scan a visitor ID; OCR suggests a name and mobile number in the browser, and the guard verifies the details before recording a visit. The ID image is not uploaded or saved. The school continues using its existing visitor-pass and flap-barrier process.
+SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a phone or tablet camera to scan a visitor ID. OCR suggests a name and mobile number in the browser, and the guard verifies the details before recording a visit. The ID image is not uploaded or saved. The school continues using its existing visitor-pass and flap-barrier process.
 
 ## Requirements
 
 - PHP 8.1 or newer with `pdo_mysql` enabled
 - MySQL 8.0.16 or newer
 - Apache with `mod_rewrite`, or PHP's development server for local testing
+- An internet connection on the scanning device (needed to load the OCR library, see "Camera and OCR")
 
 ## Create the database
 
@@ -16,14 +17,18 @@ From this directory, run the schema using the MySQL client:
 cmd /c "mysql -u root -p < schema_mysql.sql"
 ```
 
-Create a separate application user in MySQL (choose a strong password and use the same value in the `SAFEGATE_DB_PASSWORD` environment variable):
+The schema creates the `safegate` database and its tables.
+
+Then create a separate application user. Choose a strong password and use the same value later in the `SAFEGATE_DB_PASSWORD` environment variable. The host in `CREATE USER` and `GRANT` must match:
 
 ```sql
-CREATE USER 'safegate_app'@'127.0.0.1' IDENTIFIED BY 'replace-with-a-strong-password';
+CREATE USER 'safegate_app'@'localhost' IDENTIFIED BY 'replace-with-a-strong-password';
 GRANT SELECT, INSERT, UPDATE, DELETE ON safegate.* TO 'safegate_app'@'localhost';
 ```
 
-The schema creates the `safegate` database and its tables. Keep database credentials out of source control.
+If the app later fails with "access denied" while connecting through `127.0.0.1`, create the same user and grant for `'safegate_app'@'127.0.0.1'` too.
+
+Keep database credentials out of source control.
 
 ## Run locally on Windows PowerShell
 
@@ -49,15 +54,32 @@ Start the local server:
 php -S 127.0.0.1:5000 index.php
 ```
 
-Open `http://127.0.0.1:5000`. The PHP runtime must have the PDO MySQL extension enabled. The development server is for local testing only; deploy behind HTTPS with Apache or another production web server. Set `SAFEGATE_COOKIE_SECURE=1` when serving over HTTPS.
+Open `http://127.0.0.1:5000`.
+
+The development server is for local testing only. For real use, deploy behind HTTPS with Apache or another production web server, and set `SAFEGATE_COOKIE_SECURE=1`.
 
 ## Data and migration
 
-New staff and visitor records are written to MySQL. The existing `instance/safegate.sqlite3` file is left untouched, but its records are not automatically copied into MySQL. Back it up and arrange a reviewed migration before removing or discarding it.
+New staff and visitor records are written to MySQL. The old `instance/safegate.sqlite3` file is left untouched, but its records are **not** automatically copied into MySQL. Back it up and plan a reviewed migration before removing or discarding it.
+
+The SQLite file may contain real visitor data. Add it to `.gitignore` so it never gets pushed:
+
+```gitignore
+instance/
+*.sqlite3
+```
 
 ## Main workflows
 
-- Guards: sign in, scan or manually enter visitor ID details, verify the name and mobile number, record check-in, and record checkout after the school's pass has been returned.
-- Administrators: review and export visitor records, invite staff, and manage staff accounts.
+- **Guards:** sign in, scan or manually enter visitor ID details, verify the name and mobile number, record check-in, and record checkout after the school's pass has been returned.
+- **Administrators:** review and export visitor records, invite staff, and manage staff accounts.
 
-Camera scanning requires HTTPS or `localhost`. OCR runs in the browser using Tesseract.js; an internet connection is needed to load the OCR library. The captured ID image is not submitted to the server. Only record information approved by the school and follow its privacy notice and retention rules.
+## Camera and OCR
+
+- Camera scanning requires HTTPS or `localhost`.
+- OCR runs in the browser using Tesseract.js. The library is loaded from the internet, so OCR will not work if the school network blocks it. In that case, guards can still enter the details manually.
+- The captured ID image is never submitted to the server.
+
+## Privacy
+
+Only collect record information approved by the school, and follow its privacy notice and retention rules.
