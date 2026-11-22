@@ -1,15 +1,13 @@
-{% extends "base.html" %}
-{% block title %}Staff sign in · SafeGate{% endblock %}
-{% block content %}
+<?php $title = 'Staff sign in · SafeGate'; ?>
 <section class="narrow-page">
   <div class="card form-card">
     <p class="eyebrow">Staff portal</p>
     <h1>Sign in to SafeGate</h1>
     <p class="muted">Use your individual staff account. Visitor passes are not staff accounts.</p>
-    <form method="post" action="{{ url_for('login') }}" class="stack-form">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <form method="post" action="/login" class="stack-form">
+      <?php csrf_field(); ?>
       <label>Email
-        <input name="email" type="email" autocomplete="username" required value="{{ email|default('') }}">
+        <input name="email" type="email" autocomplete="username" required value="<?= h($email ?? '') ?>">
       </label>
       <label>Password
         <input name="password" type="password" autocomplete="current-password" required>
@@ -18,4 +16,3 @@
     </form>
   </div>
 </section>
-{% endblock %}
