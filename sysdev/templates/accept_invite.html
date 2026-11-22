@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Activate staff account · SafeGate{% endblock %}
+{% block content %}
+<section class="narrow-page">
+  <div class="card form-card">
+    <p class="eyebrow">Staff account invitation</p>
+    <h1>Set up your account</h1>
+    <p class="muted">{{ invited.full_name }} · {{ invited.email }}</p>
+    <form method="post" class="stack-form">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <label>Password
+        <input type="password" name="password" minlength="12" autocomplete="new-password" required>
+        <small>Use at least 12 characters.</small>
+      </label>
+      <label>Confirm password<input type="password" name="password_confirmation" minlength="12" autocomplete="new-password" required></label>
+      <button class="button button-primary" type="submit">Activate account</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

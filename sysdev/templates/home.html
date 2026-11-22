@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Staff sign in · SafeGate{% endblock %}
+{% block content %}
+<section class="narrow-page">
+  <div class="card form-card">
+    <p class="eyebrow">Guard-operated visitor log</p>
+    <h1>SafeGate staff access</h1>
+    <p class="lead">Staff sign in to scan visitor IDs and record visits. Visitors continue to use the school's existing pass and gate process.</p>
+    <a class="button button-primary" href="{{ url_for('login') }}">Staff sign in</a>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Staff sign in · SafeGate{% endblock %}
+{% block content %}
+<section class="narrow-page">
+  <div class="card form-card">
+    <p class="eyebrow">Staff portal</p>
+    <h1>Sign in to SafeGate</h1>
+    <p class="muted">Use your individual staff account. Visitor passes are not staff accounts.</p>
+    <form method="post" action="{{ url_for('login') }}" class="stack-form">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <label>Email
+        <input name="email" type="email" autocomplete="username" required value="{{ email|default('') }}">
+      </label>
+      <label>Password
+        <input name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <button class="button button-primary button-wide" type="submit">Sign in</button>
+    </form>
+  </div>
+</section>
+{% endblock %}
