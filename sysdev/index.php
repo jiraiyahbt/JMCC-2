@@ -5,162 +5,61 @@ date_default_timezone_set('Asia/Manila');
 
 const STAFF_ROLES = ['Administrator', 'Security Guard'];
 const ENTRANCES = ['Gate 1 - Main entrance', 'Gate 2 - North entrance'];
+require_once __DIR__ . '/lib/core.php';
 
-function h(mixed $value): string
+function client_ip(): string
 {
-    return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $ip = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+    return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
 }
 
-function db(): PDO
-{
-    static $connection = null;
-    if ($connection instanceof PDO) {
-        return $connection;
-    }
-
-    $host = getenv('SAFEGATE_DB_HOST') ?: '127.0.0.1';
-    $port = getenv('SAFEGATE_DB_PORT') ?: '3306';
-    $name = getenv('SAFEGATE_DB_NAME') ?: 'safegate';
-    $user = getenv('SAFEGATE_DB_USER') ?: 'safegate_app';
-    $password = getenv('SAFEGATE_DB_PASSWORD');
-    if ($password === false || $password === '') {
-        throw new RuntimeException('Set SAFEGATE_DB_PASSWORD before starting SafeGate.');
-    }
-
-    $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', $host, $port, $name);
-    $connection = new PDO($dsn, $user, $password, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
-    $connection->exec("SET time_zone = '+08:00'");
-    return $connection;
-}
-
-function now_string(): string
-{
-    return date('Y-m-d H:i:s');
-}
-
-function csrf_token_value(): string
-{
-    if (empty($_SESSION['_csrf_token'])) {
-        $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['_csrf_token'];
-}
-
-function csrf_field(): void
-{
-    echo '<input type="hidden" name="_csrf_token" value="' . h(csrf_token_value()) . '">';
-}
-
-function flash(string $category, string $message): void
-{
-    $_SESSION['_flashes'][] = [$category, $message];
-}
-
-function redirect_to(string $path): never
-{
-    header('Location: ' . $path, true, 302);
-    exit;
-}
-
-function url(string $path, array $query = []): string
-{
-    return $path . ($query ? '?' . http_build_query($query) : '');
-}
-
-function render(string $template, array $data = [], int $status = 200): never
-{
-    http_response_code($status);
-    $user = current_user();
-    $messages = $_SESSION['_flashes'] ?? [];
-    unset($_SESSION['_flashes']);
-    extract($data, EXTR_SKIP);
-    ob_start();
-    require __DIR__ . '/templates/' . $template . '.php';
-    $content = ob_get_clean();
-    require __DIR__ . '/templates/base.php';
-    exit;
-}
-
-function fail(int $status, string $description): never
-{
-    $names = [400 => 'Bad Request', 403 => 'Forbidden', 404 => 'Not Found'];
-    render('error', [
-        'error' => [
-            'code' => $status,
-            'name' => $names[$status] ?? 'Error',
-            'description' => $description,
-        ],
-    ], $status);
-}
-
-function post_value(string $key): string
-{
-    return trim((string) ($_POST[$key] ?? ''));
-}
-
-function current_user(): ?array
-{
-    static $loaded = false;
-    static $user = null;
-    if ($loaded) {
-        return $user;
-    }
-    $loaded = true;
-    $staffId = $_SESSION['staff_id'] ?? null;
-    if ($staffId === null) {
-        return null;
-    }
-
+function audit_log(
+    string $action,
+    string $entityType,
+    mixed $entityId = null,
+    ?string $details = null,
+    ?array $actor = null
+): void {
+    $actor ??= current_user();
     $statement = db()->prepare(
-        'SELECT staff_id, full_name, email, role, account_status
-         FROM staff_accounts WHERE staff_id = ?'
+        'INSERT INTO audit_log_entries
+         (actor_staff_id, actor_name, action, entity_type, entity_id, details, ip_address, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     );
-    $statement->execute([$staffId]);
-    $user = $statement->fetch() ?: null;
-    if ($user === null || $user['account_status'] !== 'Active') {
-        $_SESSION = [];
-        session_regenerate_id(true);
-        return null;
-    }
-    return $user;
+    $statement->execute([
+        $actor['staff_id'] ?? null,
+        $actor['full_name'] ?? null,
+        $action,
+        $entityType,
+        $entityId === null ? null : (string) $entityId,
+        $details,
+        client_ip(),
+        now_string(),
+    ]);
 }
 
-function require_login(?string $role = null): array
+function login_attempt_count(string $email): int
 {
-    $user = current_user();
-    if ($user === null) {
-        flash('warning', 'Sign in to continue.');
-        redirect_to('/login');
-    }
-    if ($role !== null && $user['role'] !== $role) {
-        fail(403, 'You do not have permission to access this page.');
-    }
-    return $user;
+    $statement = db()->prepare(
+        "SELECT COUNT(*) FROM login_attempts
+         WHERE email = ? AND ip_address = ?
+           AND successful = FALSE
+           AND attempted_at >= DATE_SUB(NOW(6), INTERVAL 15 MINUTE)"
+    );
+    $statement->execute([$email, client_ip()]);
+    return (int) $statement->fetchColumn();
 }
 
-function campus_date(): string
+function record_login_attempt(string $email, bool $successful): void
 {
-    return date('Y-m-d');
+    $statement = db()->prepare(
+        'INSERT INTO login_attempts (email, ip_address, attempted_at, successful)
+         VALUES (?, ?, ?, ?)'
+    );
+    $statement->execute([$email, client_ip(), now_string(), $successful]);
 }
 
-function status_class(string $status): string
-{
-    return strtolower(str_replace(' ', '-', $status));
-}
-
-function csv_safe(mixed $value): mixed
-{
-    if (is_string($value) && preg_match('/^[=+\-@\t\r]/', $value)) {
-        return "'" . $value;
-    }
-    return $value;
-}
-
-function record_rows(array $filters): array
+function record_rows(array $filters, int $limit = 500, int $offset = 0): array
 {
     $clauses = [];
     $values = [];
@@ -184,10 +83,13 @@ function record_rows(array $filters): array
     }
 
     $where = $clauses ? 'WHERE ' . implode(' AND ', $clauses) : '';
+    $limitSql = $limit > 0
+        ? 'LIMIT ' . max(1, min($limit, 10000)) . ' OFFSET ' . max(0, $offset)
+        : '';
     $statement = db()->prepare(
         "SELECT vl.visit_id, vl.visitor_name, vl.mobile_number, vl.destination,
                 vl.purpose, vl.status, vl.entrance_name, vl.exit_entrance_name,
-                vl.entry_time, vl.exit_time,
+                vl.entry_time, vl.exit_time, vl.pass_reference,
                 entry_guard.full_name AS entry_guard_name,
                 exit_guard.full_name AS exit_guard_name
          FROM visitor_log_entries AS vl
@@ -195,10 +97,153 @@ function record_rows(array $filters): array
          LEFT JOIN staff_accounts AS exit_guard ON exit_guard.staff_id = vl.exit_guard_id
          $where
          ORDER BY vl.entry_time DESC
-         LIMIT 500"
+         $limitSql"
     );
     $statement->execute($values);
     return $statement->fetchAll();
+}
+
+function record_row_count(array $filters): int
+{
+    $clauses = [];
+    $values = [];
+    if ($filters['q'] !== '') {
+        $clauses[] = '(visitor_name LIKE ? OR mobile_number LIKE ?)';
+        $term = '%' . $filters['q'] . '%';
+        $values[] = $term;
+        $values[] = $term;
+    }
+    if ($filters['visit_date'] !== '') {
+        $clauses[] = 'DATE(entry_time) = ?';
+        $values[] = $filters['visit_date'];
+    }
+    if (in_array($filters['status'], ['Inside campus', 'Exited'], true)) {
+        $clauses[] = 'status = ?';
+        $values[] = $filters['status'];
+    }
+    if (in_array($filters['entrance'], ENTRANCES, true)) {
+        $clauses[] = 'entrance_name = ?';
+        $values[] = $filters['entrance'];
+    }
+    $where = $clauses ? 'WHERE ' . implode(' AND ', $clauses) : '';
+    $statement = db()->prepare('SELECT COUNT(*) FROM visitor_log_entries ' . $where);
+    $statement->execute($values);
+    return (int) $statement->fetchColumn();
+}
+
+function duplicate_active_visits(string $name, string $mobile): array
+{
+    $clauses = ['visitor_name = ?', "status = 'Inside campus'"];
+    $values = [$name];
+    if ($mobile !== '') {
+        $clauses[] = 'mobile_number = ?';
+        $values[] = $mobile;
+    }
+    $statement = db()->prepare(
+        'SELECT visit_id, visitor_name, mobile_number, destination, entrance_name, entry_time
+         FROM visitor_log_entries
+         WHERE ' . implode(' AND ', $clauses) .
+        ' ORDER BY entry_time DESC LIMIT 10'
+    );
+    $statement->execute($values);
+    return $statement->fetchAll();
+}
+
+function visitor_history(string $name, ?string $mobile = null): array
+{
+    if ($mobile) {
+        $statement = db()->prepare(
+            'SELECT visit_id, visitor_name, mobile_number, destination, purpose,
+                    entrance_name, exit_entrance_name, entry_time, exit_time, status, pass_reference
+             FROM visitor_log_entries
+             WHERE visitor_name = ? OR mobile_number = ?
+             ORDER BY entry_time DESC LIMIT 100'
+        );
+        $statement->execute([$name, $mobile]);
+    } else {
+        $statement = db()->prepare(
+            'SELECT visit_id, visitor_name, mobile_number, destination, purpose,
+                    entrance_name, exit_entrance_name, entry_time, exit_time, status, pass_reference
+             FROM visitor_log_entries
+             WHERE visitor_name = ?
+             ORDER BY entry_time DESC LIMIT 100'
+        );
+        $statement->execute([$name]);
+    }
+    return $statement->fetchAll();
+}
+
+function create_pass_reference(): string
+{
+    return 'SG-' . strtoupper(bin2hex(random_bytes(6)));
+}
+
+function run_migrations_command(): never
+{
+    $sql = file_get_contents(__DIR__ . '/schema_mysql.sql');
+    if ($sql === false) {
+        fwrite(STDERR, "Could not read schema_mysql.sql.\n");
+        exit(1);
+    }
+    foreach (preg_split('/;\s*(?:\R|$)/', $sql) as $statementSql) {
+        $statementSql = trim(preg_replace('/^\s*--.*$/m', '', $statementSql));
+        if ($statementSql === '' || str_starts_with(strtoupper($statementSql), 'CREATE DATABASE') ||
+            str_starts_with(strtoupper($statementSql), 'USE ')) {
+            continue;
+        }
+        db()->exec($statementSql);
+    }
+    $column = db()->query(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'visitor_log_entries'
+           AND COLUMN_NAME = 'pass_reference'"
+    )->fetchColumn();
+    if ((int) $column === 0) {
+        db()->exec(
+            'ALTER TABLE visitor_log_entries
+             ADD COLUMN pass_reference VARCHAR(32) NULL AFTER visit_id,
+             ADD UNIQUE KEY uq_visitor_pass_reference (pass_reference)'
+        );
+    }
+    fwrite(STDOUT, "SafeGate database migrations applied.\n");
+    exit(0);
+}
+
+function purge_retention_command(): never
+{
+    $visitorDays = (int) (getenv('SAFEGATE_VISITOR_RETENTION_DAYS') ?: 0);
+    $auditDays = (int) (getenv('SAFEGATE_AUDIT_RETENTION_DAYS') ?: 365);
+    $attemptDays = 30;
+    if ($visitorDays < 1) {
+        fwrite(STDERR, "Set SAFEGATE_VISITOR_RETENTION_DAYS to a positive number before purging.\n");
+        exit(1);
+    }
+    db()->beginTransaction();
+    try {
+        $visitor = db()->prepare(
+            'DELETE FROM visitor_log_entries
+             WHERE status = \'Exited\' AND exit_time IS NOT NULL
+               AND exit_time < DATE_SUB(NOW(6), INTERVAL ? DAY)'
+        );
+        $visitor->execute([$visitorDays]);
+        $audits = db()->prepare(
+            'DELETE FROM audit_log_entries
+             WHERE created_at < DATE_SUB(NOW(6), INTERVAL ? DAY)'
+        );
+        $audits->execute([$auditDays]);
+        $attempts = db()->prepare(
+            'DELETE FROM login_attempts
+             WHERE attempted_at < DATE_SUB(NOW(6), INTERVAL ? DAY)'
+        );
+        $attempts->execute([$attemptDays]);
+        db()->commit();
+    } catch (Throwable $error) {
+        db()->rollBack();
+        throw $error;
+    }
+    fwrite(STDOUT, "Retention purge completed.\n");
+    exit(0);
 }
 
 function create_admin_command(): never
@@ -228,7 +273,7 @@ function create_admin_command(): never
         );
         $statement->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT), now_string()]);
     } catch (PDOException $error) {
-        if ($error->getCode() === '23000') {
+        if (($error->errorInfo[0] ?? null) === '23000') {
             fwrite(STDERR, "That email address already has an account.\n");
             exit(1);
         }
@@ -240,6 +285,14 @@ function create_admin_command(): never
 
 if (PHP_SAPI === 'cli' && ($argv[1] ?? '') === 'create-admin') {
     create_admin_command();
+}
+
+if (PHP_SAPI === 'cli' && ($argv[1] ?? '') === 'migrate') {
+    run_migrations_command();
+}
+
+if (PHP_SAPI === 'cli' && ($argv[1] ?? '') === 'purge-retention') {
+    purge_retention_command();
 }
 
 if (PHP_SAPI !== 'cli') {
@@ -306,6 +359,11 @@ if (PHP_SAPI !== 'cli') {
     if ($path === '/login' && $method === 'POST') {
         $email = strtolower(post_value('email'));
         $password = (string) ($_POST['password'] ?? '');
+        if (login_attempt_count($email) >= 5) {
+            record_login_attempt($email, false);
+            flash('error', 'Too many failed sign-in attempts. Wait 15 minutes before trying again.');
+            render('login', ['email' => $email], 429);
+        }
         $statement = db()->prepare(
             "SELECT * FROM staff_accounts
              WHERE email = ? AND account_status = 'Active'"
@@ -313,19 +371,29 @@ if (PHP_SAPI !== 'cli') {
         $statement->execute([$email]);
         $staff = $statement->fetch();
         if (!$staff || !$staff['password_hash'] || !password_verify($password, $staff['password_hash'])) {
+            record_login_attempt($email, false);
             flash('error', 'Email or password is incorrect, or the account is inactive.');
             render('login', ['email' => $email], 401);
         }
+        record_login_attempt($email, true);
         session_regenerate_id(true);
         $_SESSION = [];
         $_SESSION['staff_id'] = $staff['staff_id'];
         csrf_token_value();
+        audit_log(
+            'Signed in',
+            'staff_account',
+            $staff['staff_id'],
+            null,
+            ['staff_id' => $staff['staff_id'], 'full_name' => $staff['full_name']]
+        );
         flash('success', 'Welcome, ' . $staff['full_name'] . '.');
         redirect_to($staff['role'] === 'Administrator' ? '/admin' : '/guard');
     }
 
     if ($path === '/logout' && $method === 'POST') {
         require_login();
+        audit_log('Signed out', 'staff_account', $user['staff_id']);
         $_SESSION = [];
         session_regenerate_id(true);
         flash('info', 'You have signed out.');
@@ -355,16 +423,32 @@ if (PHP_SAPI !== 'cli') {
         $visitsToday = (int) $statement->fetchColumn();
         $statement = db()->prepare(
             "SELECT visit_id, visitor_name, mobile_number, destination, purpose,
-                    entrance_name, exit_entrance_name, entry_time, exit_time, status
+                    entrance_name, exit_entrance_name, entry_time, exit_time, status, pass_reference
              FROM visitor_log_entries
              WHERE DATE(entry_time) = ? OR status = 'Inside campus'
              ORDER BY entry_time DESC LIMIT 100"
         );
         $statement->execute([$today]);
+        $visits = $statement->fetchAll();
+        $longStayHours = max(1, (int) (getenv('SAFEGATE_LONG_STAY_HOURS') ?: 8));
+        $longStayCount = 0;
+        foreach ($visits as $visit) {
+            if ($visit['status'] === 'Inside campus') {
+                $minutes = (time() - strtotime($visit['entry_time'])) / 60;
+                if ($minutes >= $longStayHours * 60) {
+                    $longStayCount++;
+                }
+            }
+        }
         render('guard_dashboard', [
             'entrance' => $entrance,
-            'stats' => ['inside' => $inside, 'exited' => $exited, 'visits' => $visitsToday],
-            'visits' => $statement->fetchAll(),
+            'stats' => [
+                'inside' => $inside,
+                'exited' => $exited,
+                'visits' => $visitsToday,
+                'long_stays' => $longStayCount,
+            ],
+            'visits' => $visits,
             'today' => $today,
             'entrances' => $entrances,
         ]);
@@ -382,6 +466,13 @@ if (PHP_SAPI !== 'cli') {
             'destination' => post_value('destination'),
             'purpose' => post_value('purpose'),
         ];
+        $duplicates = [];
+        if ($method === 'POST' && $formData['visitor_name'] !== '') {
+            $duplicates = duplicate_active_visits(
+                $formData['visitor_name'],
+                $formData['mobile_number']
+            );
+        }
         $errors = [];
         if ($method === 'POST') {
             $entrance = (string) ($_POST['entrance'] ?? '');
@@ -407,14 +498,22 @@ if (PHP_SAPI !== 'cli') {
             if (($_POST['identity_confirmed'] ?? '') !== 'yes') {
                 $errors[] = 'Confirm that you reviewed the visitor details against their ID.';
             }
+            $duplicates = duplicate_active_visits(
+                $formData['visitor_name'],
+                $formData['mobile_number']
+            );
+            if ($duplicates && (($_POST['duplicate_confirmed'] ?? '') !== 'yes')) {
+                $errors[] = 'An active visit matches this visitor. Confirm that this is a separate visit.';
+            }
             if (!$errors) {
                 $statement = db()->prepare(
                     "INSERT INTO visitor_log_entries
-                     (visitor_name, mobile_number, destination, purpose, entrance_name,
+                     (pass_reference, visitor_name, mobile_number, destination, purpose, entrance_name,
                       entry_guard_id, entry_time, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 'Inside campus')"
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Inside campus')"
                 );
                 $statement->execute([
+                    create_pass_reference(),
                     $formData['visitor_name'],
                     $formData['mobile_number'] ?: null,
                     $formData['destination'],
@@ -423,6 +522,12 @@ if (PHP_SAPI !== 'cli') {
                     $user['staff_id'],
                     now_string(),
                 ]);
+                audit_log(
+                    'Checked in visitor',
+                    'visitor_log_entry',
+                    db()->lastInsertId(),
+                    'Entrance: ' . $entrance
+                );
                 flash('success', "Visitor check-in recorded. Continue the school's existing pass process.");
                 redirect_to(url('/guard', ['entrance' => $entrance]));
             }
@@ -432,6 +537,7 @@ if (PHP_SAPI !== 'cli') {
             'entrance' => $entrance,
             'form_data' => $formData,
             'entrances' => $entrances,
+            'duplicates' => $duplicates,
         ], $errors ? 400 : 200);
     }
 
@@ -445,6 +551,35 @@ if (PHP_SAPI !== 'cli') {
             flash('error', "Confirm that the visitor has returned the school's pass and left campus.");
             redirect_to(url('/guard', ['entrance' => $entrance]));
         }
+
+        if (preg_match('#^/guard/visits/(\d+)/pass$#', $path, $matches) && $method === 'GET') {
+            require_login('Security Guard');
+            $statement = db()->prepare(
+                'SELECT visit_id, pass_reference, visitor_name, destination, purpose,
+                        entrance_name, entry_time, status
+                 FROM visitor_log_entries WHERE visit_id = ?'
+            );
+            $statement->execute([(int) $matches[1]]);
+            $visit = $statement->fetch();
+            if (!$visit) {
+                fail(404, 'The visitor pass record could not be found.');
+            }
+            render('visitor_pass', ['visit' => $visit, 'passPage' => true]);
+        }
+
+        if ($path === '/guard/visitor-history' && $method === 'GET') {
+            require_login('Security Guard');
+            $name = trim((string) ($_GET['name'] ?? ''));
+            $mobile = trim((string) ($_GET['mobile'] ?? ''));
+            $history = $name !== ''
+                ? visitor_history($name, $mobile !== '' ? $mobile : null)
+                : [];
+            render('visitor_history', [
+                'name' => $name,
+                'mobile' => $mobile,
+                'history' => $history,
+            ]);
+        }
         $statement = db()->prepare(
             "UPDATE visitor_log_entries
              SET status = 'Exited', exit_time = ?, exit_guard_id = ?, exit_entrance_name = ?
@@ -454,6 +589,12 @@ if (PHP_SAPI !== 'cli') {
         if ($statement->rowCount() !== 1) {
             flash('warning', 'This visit is already checked out or could not be found.');
         } else {
+            audit_log(
+                'Checked out visitor',
+                'visitor_log_entry',
+                (int) $matches[1],
+                'Exit entrance: ' . $entrance
+            );
             flash('success', 'Visitor checkout recorded.');
         }
         redirect_to(url('/guard', ['entrance' => $entrance]));
@@ -472,6 +613,11 @@ if (PHP_SAPI !== 'cli') {
             'status' => trim((string) ($_GET['status'] ?? '')),
             'entrance' => trim((string) ($_GET['entrance'] ?? '')),
         ];
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $perPage = 50;
+        $totalRecords = record_row_count($filters);
+        $totalPages = max(1, (int) ceil($totalRecords / $perPage));
+        $page = min($page, $totalPages);
         $today = campus_date();
         $statement = db()->prepare(
             "SELECT
@@ -483,10 +629,14 @@ if (PHP_SAPI !== 'cli') {
         $statement->execute([$today, $today]);
         render('admin_records', [
             'filters' => $filters,
-            'records' => record_rows($filters),
+            'records' => record_rows($filters, $perPage, ($page - 1) * $perPage),
             'totals' => $statement->fetch(),
             'today' => $today,
             'entrances' => $entrances,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_pages' => $totalPages,
+            'total_records' => $totalRecords,
         ]);
     }
 
@@ -505,9 +655,9 @@ if (PHP_SAPI !== 'cli') {
         fputcsv($output, [
             'Visitor', 'Mobile', 'Person or office visited', 'Visit purpose', 'Check-in',
             'Check-in entrance', 'Check-in guard', 'Check-out', 'Check-out entrance',
-            'Check-out guard', 'Status',
+            'Check-out guard', 'Status', 'Pass reference',
         ]);
-        foreach (record_rows($filters) as $record) {
+        foreach (record_rows($filters, 0) as $record) {
             fputcsv($output, array_map('csv_safe', [
                 $record['visitor_name'],
                 $record['mobile_number'] ?? '',
@@ -520,10 +670,23 @@ if (PHP_SAPI !== 'cli') {
                 $record['exit_entrance_name'] ?? '',
                 $record['exit_guard_name'] ?? '',
                 $record['status'],
+                $record['pass_reference'] ?? '',
             ]));
         }
         fclose($output);
         exit;
+    }
+
+    if ($path === '/admin/audit' && $method === 'GET') {
+        require_login('Administrator');
+        $entries = db()->query(
+            'SELECT audit_id, actor_name, action, entity_type, entity_id,
+                    details, ip_address, created_at
+             FROM audit_log_entries
+             ORDER BY created_at DESC
+             LIMIT 200'
+        )->fetchAll();
+        render('admin_audit', ['entries' => $entries]);
     }
 
     if ($path === '/admin/users' && in_array($method, ['GET', 'POST'], true)) {
@@ -552,6 +715,7 @@ if (PHP_SAPI !== 'cli') {
                     $statement->execute([
                         $fullName, $email, $role, hash('sha256', $token), $expires, now_string(),
                     ]);
+                    audit_log('Created staff invitation', 'staff_account', db()->lastInsertId(), 'Role: ' . $role);
                     $invitationUrl = url('/accept-invite/' . rawurlencode($token));
                     flash('success', 'Staff invitation created. Share the one-time link with the staff member.');
                 } catch (PDOException $error) {
@@ -610,6 +774,7 @@ if (PHP_SAPI !== 'cli') {
             'UPDATE staff_accounts SET role = ?, account_status = ? WHERE staff_id = ?'
         );
         $statement->execute([$role, $status, $staffId]);
+        audit_log('Updated staff account', 'staff_account', $staffId, 'Role: ' . $role . '; Status: ' . $status);
         flash('success', 'Staff account updated.');
         redirect_to('/admin/users');
     }
@@ -642,6 +807,7 @@ if (PHP_SAPI !== 'cli') {
                      WHERE staff_id = ? AND account_status = 'Invited'"
                 );
                 $statement->execute([password_hash($password, PASSWORD_DEFAULT), $invited['staff_id']]);
+                audit_log('Accepted staff invitation', 'staff_account', $invited['staff_id']);
                 flash('success', 'Account activated. You can now sign in.');
                 redirect_to('/login');
             }
@@ -669,6 +835,7 @@ if (PHP_SAPI !== 'cli') {
                     'UPDATE staff_accounts SET password_hash = ? WHERE staff_id = ?'
                 );
                 $statement->execute([password_hash($newPassword, PASSWORD_DEFAULT), $user['staff_id']]);
+                audit_log('Changed own password', 'staff_account', $user['staff_id']);
                 flash('success', 'Password updated.');
                 redirect_to('/account/password');
             }

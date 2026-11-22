@@ -19,7 +19,7 @@
   </form>
 </section>
 <section class="card table-card">
-  <div class="section-heading"><div><h2>Visitor log entries</h2><p class="muted"><?= count($records) ?> record(s), up to 500 displayed</p></div></div>
+  <div class="section-heading"><div><h2>Visitor log entries</h2><p class="muted"><?= h($total_records) ?> matching record(s); page <?= h($page) ?> of <?= h($total_pages) ?></p></div></div>
   <?php if ($records): ?>
     <div class="table-wrap"><table>
       <thead><tr><th>Visitor / mobile</th><th>Person or office / purpose</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Entrance / guard</th></tr></thead>
@@ -30,9 +30,15 @@
           <td><?= h($record['entry_time'] ?: '—') ?></td>
           <td><?= h($record['exit_time'] ?: '—') ?></td>
           <td><span class="badge badge-<?= h(status_class($record['status'])) ?>"><?= h($record['status']) ?></span></td>
-          <td>In: <?= h($record['entrance_name'] ?: '—') ?><?php if ($record['entry_guard_name']): ?><small><?= h($record['entry_guard_name']) ?></small><?php endif; ?><?php if ($record['exit_entrance_name']): ?><small>Out: <?= h($record['exit_entrance_name']) ?><?php if ($record['exit_guard_name']): ?> · <?= h($record['exit_guard_name']) ?><?php endif; ?></small><?php endif; ?></td>
+          <td>In: <?= h($record['entrance_name'] ?: '—') ?><?php if ($record['entry_guard_name']): ?><small><?= h($record['entry_guard_name']) ?></small><?php endif; ?><?php if ($record['exit_entrance_name']): ?><small>Out: <?= h($record['exit_entrance_name']) ?><?php if ($record['exit_guard_name']): ?> · <?= h($record['exit_guard_name']) ?><?php endif; ?></small><?php endif; ?><small>Pass: <?= h($record['pass_reference'] ?: '—') ?></small></td>
         </tr>
       <?php endforeach; ?></tbody>
     </table></div>
   <?php else: ?><p class="empty-state">No records match these filters.</p><?php endif; ?>
+  <?php if ($total_pages > 1): ?>
+    <nav class="form-actions" aria-label="Visitor record pages">
+      <?php if ($page > 1): ?><a class="button button-secondary" href="<?= h(url('/admin/records', array_merge($filters, ['page' => $page - 1]))) ?>">Previous</a><?php endif; ?>
+      <?php if ($page < $total_pages): ?><a class="button button-secondary" href="<?= h(url('/admin/records', array_merge($filters, ['page' => $page + 1]))) ?>">Next</a><?php endif; ?>
+    </nav>
+  <?php endif; ?>
 </section>

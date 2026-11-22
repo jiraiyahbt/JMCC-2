@@ -6,8 +6,11 @@
   <title><?= h($title ?? 'SafeGate · Universidad de Zamboanga') ?></title>
   <link rel="stylesheet" href="/static/css/app.css">
   <?php if (!empty($scannerPage)): ?>
-    <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+    <script defer src="/static/vendor/tesseract/tesseract.min.js"></script>
     <script defer src="/static/js/id_scan.js"></script>
+  <?php endif; ?>
+  <?php if (!empty($passPage)): ?>
+    <script defer src="/static/vendor/qrcode.min.js"></script>
   <?php endif; ?>
 </head>
 <body>
@@ -18,9 +21,11 @@
         <?php if ($user['role'] === 'Administrator'): ?>
           <a href="/admin/records">Visitor records</a>
           <a href="/admin/users">User accounts</a>
+          <a href="/admin/audit">Audit log</a>
         <?php else: ?>
           <a href="/guard">Monitoring</a>
           <a href="/guard/verify">Scan visitor ID</a>
+          <a href="/guard/visitor-history">Visitor history</a>
         <?php endif; ?>
         <a href="/account/password">Account</a>
         <form action="/logout" method="post" class="inline-form">

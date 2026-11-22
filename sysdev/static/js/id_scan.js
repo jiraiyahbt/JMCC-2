@@ -75,6 +75,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const result = await window.Tesseract.recognize(source, "eng", {
+        workerPath: "/static/vendor/tesseract/worker.min.js",
+        corePath: "/static/vendor/tesseract/core/",
+        langPath: "/static/vendor/tesseract/lang/",
+        gzip: true,
         logger: (event) => {
           if (event.status === "recognizing text" && Number.isFinite(event.progress)) {
             progress.value = Math.round(event.progress * 100);

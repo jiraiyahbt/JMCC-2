@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS staff_accounts (
 
 CREATE TABLE IF NOT EXISTS visitor_log_entries (
     visit_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    pass_reference VARCHAR(32) NULL,
     visitor_name VARCHAR(120) NOT NULL,
     mobile_number VARCHAR(20) NULL,
     destination VARCHAR(100) NOT NULL,
@@ -45,15 +46,16 @@ CREATE TABLE IF NOT EXISTS visitor_log_entries (
     exit_time DATETIME(6) NULL,
     status ENUM('Inside campus', 'Exited') NOT NULL,
     PRIMARY KEY (visit_id),
+    UNIQUE KEY uq_visitor_pass_reference (pass_reference),
     KEY idx_visitor_logs_entry_status (entry_time, status),
     KEY idx_visitor_logs_name (visitor_name),
     KEY idx_visitor_logs_mobile (mobile_number),
     CONSTRAINT fk_visitor_logs_entry_guard
         FOREIGN KEY (entry_guard_id) REFERENCES staff_accounts (staff_id)
-        ON UPDATE CASCADE ON DELETE RESTRICT,
+        ON UPDATE RESTRICT ON DELETE RESTRICT,
     CONSTRAINT fk_visitor_logs_exit_guard
         FOREIGN KEY (exit_guard_id) REFERENCES staff_accounts (staff_id)
-        ON UPDATE CASCADE ON DELETE RESTRICT,
+        ON UPDATE RESTRICT ON DELETE RESTRICT,
     CONSTRAINT chk_visitor_log_fields CHECK (
         CHAR_LENGTH(visitor_name) BETWEEN 1 AND 120
         AND (mobile_number IS NULL OR CHAR_LENGTH(mobile_number) BETWEEN 7 AND 20)
@@ -74,4 +76,32 @@ CREATE TABLE IF NOT EXISTS visitor_log_entries (
             AND exit_entrance_name IS NOT NULL
             AND exit_guard_id IS NOT NULL)
     )
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+    attempt_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    email VARCHAR(254) NOT NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    attempted_at DATETIME(6) NOT NULL,
+    successful BOOLEAN NOT NULL,
+    PRIMARY KEY (attempt_id),
+    KEY idx_login_attempt_lookup (email, ip_address, attempted_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS audit_log_entries (
+    audit_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    actor_staff_id BIGINT UNSIGNED NULL,
+    actor_name VARCHAR(120) NULL,
+    action VARCHAR(80) NOT NULL,
+    entity_type VARCHAR(80) NOT NULL,
+    entity_id VARCHAR(100) NULL,
+    details VARCHAR(500) NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (audit_id),
+    KEY idx_audit_created (created_at),
+    KEY idx_audit_actor (actor_staff_id, created_at),
+    CONSTRAINT fk_audit_actor
+        FOREIGN KEY (actor_staff_id) REFERENCES staff_accounts (staff_id)
+        ON UPDATE RESTRICT ON DELETE SET NULL
 ) ENGINE=InnoDB;

@@ -7,6 +7,7 @@
   </div>
   <a class="button button-primary" href="<?= h(url('/guard/verify', ['entrance' => $entrance])) ?>">Scan visitor ID</a>
 </section>
+<nav class="form-actions"><a class="button button-secondary" href="/guard/visitor-history">Search visitor history</a></nav>
 <form class="filter-bar compact-filter" method="get" action="/guard">
   <label>Selected entrance
     <select name="entrance" onchange="this.form.submit()">
@@ -19,6 +20,9 @@
   <article class="card stat-card"><span>Visits today</span><strong><?= h($stats['visits']) ?></strong><small>Check-in recorded</small></article>
   <article class="card stat-card"><span>Checked out today</span><strong><?= h($stats['exited']) ?></strong><small>Visit completed</small></article>
 </section>
+<?php if (!empty($stats['long_stays'])): ?>
+  <div class="notice"><strong>Long-stay alert</strong><p><?= h($stats['long_stays']) ?> active visit(s) have exceeded the configured stay threshold.</p></div>
+<?php endif; ?>
 <section class="card table-card">
   <div class="section-heading"><div><h2>Today's and active visits</h2><p class="muted"><?= count($visits) ?> recent visit(s), including anyone still inside</p></div><a class="button button-secondary" href="<?= h(url('/guard/verify', ['entrance' => $entrance])) ?>">New check-in</a></div>
   <?php if ($visits): ?>
@@ -42,6 +46,7 @@
                     <button class="button button-secondary" type="submit">Record check-out</button>
                   </form>
                 <?php else: ?>Complete<?php endif; ?>
+                <a class="button button-secondary" href="/guard/visits/<?= h($visit['visit_id']) ?>/pass">Pass reference</a>
               </td>
             </tr>
           <?php endforeach; ?>

@@ -108,6 +108,8 @@ input:focus, select:focus, textarea:focus { outline: 3px solid rgb(40 103 167 / 
 .pass-body h2 { margin: 16px 0 4px; font-size: 25px; }
 .pass-body > p { color: var(--muted); }
 .qr-image { display: block; width: 220px; height: 220px; margin: 20px auto; image-rendering: pixelated; }
+#visitorQr { width: 220px; margin: 20px auto; }
+#visitorQr canvas, #visitorQr img { display: block; margin: 0 auto; }
 .badge { display: inline-flex; padding: 4px 9px; border-radius: 5px; background: #edf2f6; color: #536779; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .badge-awaiting-verification { background: #fff4d8; color: var(--amber); }
 .badge-inside-campus { background: #e4f1fb; color: var(--blue-dark); }

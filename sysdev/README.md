@@ -30,6 +30,16 @@ If the app later fails with "access denied" while connecting through `127.0.0.1`
 
 Keep database credentials out of source control.
 
+## Apply or update the database
+
+After setting the database environment variables, the schema and all new tables can be applied with:
+
+```powershell
+php index.php migrate
+```
+
+The `migrate` command requires the database name and application database user to be reachable. Review each schema change before applying it to a production database.
+
 ## Run locally on Windows PowerShell
 
 Set the connection settings in the same PowerShell window:
@@ -46,6 +56,12 @@ Create the first administrator. The CLI asks for a full name, email, and a passw
 
 ```powershell
 php index.php create-admin
+```
+
+Run the test suite:
+
+```powershell
+php tests/test_helpers.php
 ```
 
 Start the local server:
@@ -74,12 +90,42 @@ instance/
 - **Guards:** sign in, scan or manually enter visitor ID details, verify the name and mobile number, record check-in, and record checkout after the school's pass has been returned.
 - **Administrators:** review and export visitor records, invite staff, and manage staff accounts.
 
+## Modules
+
+1. Authentication and account management: individual staff sign-in, roles, invitations, activation, password changes, and active/inactive access.
+2. Guard operations: entrance selection, ID scanning or manual entry, OCR verification, check-in, check-out, and pass-return confirmation.
+3. Visitor records: active visits, daily and completed visits, search/filtering, entrance and guard details, pagination, and CSV exports.
+4. Administration: staff management, account roles/status, reports, and audit-log review.
+5. Security and data: CSRF protection, password hashing, one-time invitation tokens, browser-only OCR, no ID-image upload, audit logging, and validation.
+6. Visitor history and duplicate detection: guard can search prior visits and is warned before recording a matching active visitor.
+7. Pass reference: each visit receives a unique text/QR reference. It does not replace or control the school's physical pass/barrier process.
+8. Long-stay monitoring: active visits older than `SAFEGATE_LONG_STAY_HOURS` are highlighted on the guard dashboard.
+
 ## Camera and OCR
 
 - Camera scanning requires HTTPS or `localhost`.
-- OCR runs in the browser using Tesseract.js. The library is loaded from the internet, so OCR will not work if the school network blocks it. In that case, guards can still enter the details manually.
+- OCR runs in the browser using Tesseract.js. If local recognition assets are unavailable or scanning fails, guards can still enter details manually.
+- Tesseract.js and its worker, language, and WebAssembly assets are served from `static/vendor/tesseract`, so recognition does not require an external CDN. Keep the bundled third-party assets with the approved school deployment.
 - The captured ID image is never submitted to the server.
 
 ## Privacy
 
 Only collect record information approved by the school, and follow its privacy notice and retention rules.
+
+## Operations and retention
+
+- The application records failed and successful sign-ins, staff changes, visitor check-ins/check-outs, and invitation activation in `audit_log_entries`.
+- Set `SAFEGATE_LONG_STAY_HOURS` to the school-approved notification threshold (default: 8 hours).
+- Sign-in attempts are limited to five failures per email and IP address within 15 minutes.
+- Set `SAFEGATE_VISITOR_RETENTION_DAYS` and `SAFEGATE_AUDIT_RETENTION_DAYS` before running retention cleanup.
+- Only completed visits older than the configured retention period are deleted:
+
+```powershell
+$env:SAFEGATE_VISITOR_RETENTION_DAYS = "365"
+$env:SAFEGATE_AUDIT_RETENTION_DAYS = "365"
+php index.php purge-retention
+```
+
+- Login attempts older than 30 days are removed by the same command.
+- Back up the MySQL database and reviewed configuration before applying migrations or retention cleanup.
+- Deploy behind HTTPS, set `SAFEGATE_COOKIE_SECURE=1`, restrict database and filesystem permissions, and rotate database credentials if exposure is suspected.
