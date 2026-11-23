@@ -1,20 +1,2 @@
-# Local database files
-instance/
-*.sqlite
+sysdev/instance/
 *.sqlite3
-
-# Environment and secrets
-.env
-.env.*
-*.pem
-*.key
-
-# PHP tooling and caches
-vendor/
-.phpunit.cache/
-coverage/
-
-# OS and editor files
-.DS_Store
-Thumbs.db
-.vscode/
