@@ -104,8 +104,10 @@ instance/
 ## Camera and OCR
 
 - Camera scanning requires HTTPS or `localhost`.
-- OCR runs in the browser using Tesseract.js. If local recognition assets are unavailable or scanning fails, guards can still enter details manually.
-- Tesseract.js and its worker, language, and WebAssembly assets are served from `static/vendor/tesseract`, so recognition does not require an external CDN. Keep the bundled third-party assets with the approved school deployment.
+- QR decoding and OCR run in the browser using jsQR and Tesseract.js. The QR reader recognizes plain `name`/`full_name`/`visitor_name` and `mobile`/`phone` fields, including labeled text or a flat JSON object. Other QR formats may not produce suggestions.
+- QR contents are treated only as data. Links are not opened, and QR data is not sent to the server by the scanner.
+- If local recognition assets are unavailable or scanning fails, guards can still enter details manually.
+- jsQR and Tesseract.js, workers, language data, and WebAssembly assets are served locally from `static/vendor`, so scanning does not require an external CDN. Keep the bundled third-party assets and license notices with the approved school deployment.
 - The captured ID image is never submitted to the server.
 
 ## Privacy

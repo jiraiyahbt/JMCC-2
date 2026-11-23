@@ -6,6 +6,7 @@
   <title><?= h($title ?? 'SafeGate · Universidad de Zamboanga') ?></title>
   <link rel="stylesheet" href="/static/css/app.css">
   <?php if (!empty($scannerPage)): ?>
+    <script defer src="/static/vendor/jsQR.js"></script>
     <script defer src="/static/vendor/tesseract/tesseract.min.js"></script>
     <script defer src="/static/js/id_scan.js"></script>
   <?php endif; ?>

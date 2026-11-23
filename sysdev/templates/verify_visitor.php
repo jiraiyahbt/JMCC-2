@@ -20,7 +20,7 @@ $duplicates = isset($duplicates) && is_array($duplicates) ? $duplicates : [];
   <a class="back-link" href="<?= h(url('/guard', ['entrance' => $entrance])) ?>">← Back to visitor log</a>
   <p class="eyebrow">Gate operations / check in</p>
   <h1>Scan visitor ID</h1>
-  <p class="lead">Capture the ID with the guard's device. Text recognition runs in this browser; the ID image is not uploaded or saved. Review the suggested name and mobile before recording the visit.</p>
+  <p class="lead">Capture the ID with the guard's device. QR decoding and text recognition run in this browser; the ID image is not uploaded or saved. Review all suggestions before recording the visit.</p>
   <?php if (!empty($errors)): ?><div class="flash flash-error"><ul><?php foreach ($errors as $error): ?><li><?= h($error) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
   <section class="card scanner-card">
     <div class="scanner-preview"><video id="idVideo" autoplay muted playsinline></video><p id="cameraMessage">Open the camera, frame the ID, then capture it to read printed text.</p></div>

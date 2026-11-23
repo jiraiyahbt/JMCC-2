@@ -61,42 +61,146 @@ document.addEventListener("DOMContentLoaded", () => {
     return "";
   }
 
-  async function readImage(source) {
-    if (!window.Tesseract?.recognize) {
-      scanMessage.textContent = "Text recognition did not load. Check your internet connection or fill in the fields manually.";
-      return;
+  function parseQrFields(payload) {
+    const value = payload.trim();
+    if (/^(?:https?:\/\/|www\.)/i.test(value)) {
+      return { name: "", mobile: "", isLink: true };
     }
-    scanMessage.textContent = "Reading ID locally in this browser…";
+
+    let fields = {};
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        fields = Object.fromEntries(
+          Object.entries(parsed).map(([key, item]) => [
+            key.toLowerCase().replace(/[^a-z0-9]/g, ""),
+            typeof item === "string" || typeof item === "number" ? String(item) : "",
+          ])
+        );
+      }
+    } catch {
+      // QR contents may be plain labeled text rather than JSON.
+    }
+
+    const pick = (aliases) => {
+      for (const alias of aliases) {
+        if (fields[alias]) return fields[alias].trim();
+      }
+      return "";
+    };
+    const nameMatch = value.match(/^(?:full[\s_-]*name|visitor[\s_-]*name|name)\s*[:=]\s*(.+)$/im);
+    const mobileMatch = value.match(/^(?:mobile(?:[\s_-]*number)?|phone(?:[\s_-]*number)?|tel)\s*[:=]\s*(.+)$/im);
+    const name = (pick(["fullname", "visitorname", "name"]) || nameMatch?.[1] || "")
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .trim()
+      .slice(0, 120);
+    let mobile = (pick(["mobilenumber", "mobile", "phonenumber", "phone", "tel"]) ||
+      mobileMatch?.[1] || "").replace(/[\u0000-\u001f\u007f]/g, "").trim();
+    if (!mobile) mobile = extractMobile(value);
+    if (!/^[+0-9][0-9()\-\s]{6,19}$/.test(mobile)) mobile = "";
+
+    return { name, mobile, isLink: false };
+  }
+
+  async function decodeQr(source) {
+    if (typeof window.jsQR !== "function") return null;
+
+    let image = source;
+    let bitmap = null;
+    try {
+      if (source instanceof Blob) {
+        if (typeof createImageBitmap !== "function") return null;
+        bitmap = await createImageBitmap(source);
+        image = bitmap;
+      }
+      const width = image.videoWidth || image.naturalWidth || image.width;
+      const height = image.videoHeight || image.naturalHeight || image.height;
+      if (!width || !height) return null;
+
+      const scale = Math.min(1, 1600 / Math.max(width, height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) return null;
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      return window.jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "attemptBoth",
+      })?.data ?? null;
+    } finally {
+      if (bitmap) bitmap.close();
+    }
+  }
+
+  async function readImage(source) {
+    scanMessage.textContent = "Checking the QR code and reading the ID locally…";
     progress.hidden = false;
     progress.value = 0;
     startButton.disabled = true;
     captureButton.disabled = true;
     chooseButton.disabled = true;
 
+    let qrFound = false;
+    let qrFields = { name: "", mobile: "", isLink: false };
     try {
-      const result = await window.Tesseract.recognize(source, "eng", {
-        workerPath: "/static/vendor/tesseract/worker.min.js",
-        corePath: "/static/vendor/tesseract/core/",
-        langPath: "/static/vendor/tesseract/lang/",
-        gzip: true,
-        logger: (event) => {
-          if (event.status === "recognizing text" && Number.isFinite(event.progress)) {
-            progress.value = Math.round(event.progress * 100);
+      try {
+        const payload = await decodeQr(source);
+        if (payload !== null) {
+          qrFound = true;
+          qrFields = parseQrFields(payload);
+        }
+      } catch (error) {
+        console.error("Could not decode the visitor ID QR code.", error);
+      }
+
+      if (qrFields.name) nameInput.value = qrFields.name;
+      if (qrFields.mobile) mobileInput.value = qrFields.mobile;
+
+      let detectedName = "";
+      let detectedMobile = "";
+      if (window.Tesseract?.recognize) {
+        try {
+          const result = await window.Tesseract.recognize(source, "eng", {
+            workerPath: "/static/vendor/tesseract/worker.min.js",
+            corePath: "/static/vendor/tesseract/core/",
+            langPath: "/static/vendor/tesseract/lang/",
+            workerBlobURL: false,
+            gzip: true,
+            logger: (event) => {
+              if (event.status === "recognizing text" && Number.isFinite(event.progress)) {
+                progress.value = Math.round(event.progress * 100);
+              }
+            },
+          });
+          const lines = result.data.text.split(/\r?\n/);
+          detectedName = extractName(lines);
+          detectedMobile = extractMobile(result.data.text);
+        } catch (error) {
+          console.error("Could not read the visitor ID text.", error);
+          if (!qrFields.name && !qrFields.mobile) {
+            scanMessage.textContent = "Could not read this ID. Try better lighting or enter the details manually.";
           }
-        },
-      });
-      const lines = result.data.text.split(/\r?\n/);
-      const detectedName = extractName(lines);
-      const detectedMobile = extractMobile(result.data.text);
-      if (detectedName) nameInput.value = detectedName;
-      if (detectedMobile) mobileInput.value = detectedMobile;
-      const found = [detectedName && "name", detectedMobile && "mobile number"].filter(Boolean);
-      scanMessage.textContent = found.length
-        ? `Suggested ${found.join(" and ")}. Verify and correct the fields before saving.`
-        : "No name or mobile number was confidently recognized. Fill in the fields and verify them against the ID.";
-    } catch (error) {
-      console.error("Could not read the visitor ID image.", error);
-      scanMessage.textContent = "Could not read this image. Try better lighting or enter the details manually.";
+        }
+      } else if (!qrFields.name && !qrFields.mobile) {
+        scanMessage.textContent = "Text recognition could not be loaded. Refresh the page or enter the details manually.";
+      }
+
+      if (detectedName && !qrFields.name) nameInput.value = detectedName;
+      if (detectedMobile && !qrFields.mobile) mobileInput.value = detectedMobile;
+      const found = [
+        (qrFields.name || detectedName) && "name",
+        (qrFields.mobile || detectedMobile) && "mobile number",
+      ].filter(Boolean);
+      if (found.length) {
+        scanMessage.textContent = `Suggested ${found.join(" and ")}. Verify and correct the fields before saving.`;
+      } else if (qrFound && qrFields.isLink) {
+        scanMessage.textContent = "A QR link was detected but not opened. Verify the ID and enter details manually.";
+      } else if (qrFound) {
+        scanMessage.textContent = "A QR code was found, but its data format was not recognized. Verify the ID and enter details manually.";
+      } else if (window.Tesseract?.recognize) {
+        scanMessage.textContent = "No name or mobile number was recognized. Fill in the fields and verify them against the ID.";
+      }
     } finally {
       progress.hidden = true;
       chooseButton.disabled = false;
