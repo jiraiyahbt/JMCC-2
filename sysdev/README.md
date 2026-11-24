@@ -105,7 +105,8 @@ instance/
 
 - Camera scanning requires HTTPS or `localhost`.
 - Printed-text OCR runs in the browser using Tesseract.js; QR codes are not read by the visitor-ID scanner.
-- OCR displays all text it recognizes and suggests a name, Philippine mobile number, and address when those details can be matched. ID layouts vary and OCR can miss or misread text; the guard must verify or correct all suggestions. The full recognized text remains only in the open page and is not stored with the visit. Destination and purpose must be entered manually.
+- Camera capture is cropped to the visible ID viewfinder, then grayscaled and contrast-enhanced on a canvas before OCR. The camera preview and canvas are not mirrored. Uploaded images are OCR'd in full.
+- OCR output appears line-by-line in one editable text area. It is not parsed into visitor fields or submitted with the visit; the guard reviews it and manually enters the required visitor details into the form. OCR can miss or misread text, so verify all details against the physical ID.
 - If local recognition assets are unavailable or scanning fails, guards can still enter details manually.
 - Tesseract.js, its worker, language data, and WebAssembly assets are served locally from `static/vendor/tesseract`. Keep the bundled third-party assets with the approved school deployment.
 - The captured ID image is never submitted to the server.

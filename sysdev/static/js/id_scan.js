@@ -8,18 +8,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const stopButton = document.getElementById("stopCamera");
   const imageInput = document.getElementById("idImageInput");
   const viewfinder = document.getElementById("idViewfinder");
-  const nameInput = document.getElementById("visitorName");
-  const mobileInput = document.getElementById("mobileNumber");
-  const addressInput = document.getElementById("visitorAddress");
-  const ocrTextDetails = document.getElementById("ocrTextDetails");
   const ocrText = document.getElementById("recognizedIdText");
   const cameraMessage = document.getElementById("cameraMessage");
   const scanMessage = document.getElementById("scanMessage");
   const progress = document.getElementById("ocrProgress");
 
   if (!video || !startButton || !captureButton || !chooseButton || !stopButton ||
-      !imageInput || !nameInput || !mobileInput || !addressInput ||
-      !ocrTextDetails || !ocrText || !cameraMessage || !scanMessage || !progress) {
+      !imageInput || !viewfinder || !ocrText || !cameraMessage || !scanMessage || !progress) {
     return;
   }
 
@@ -27,6 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let isScanning = false;
 
   function syncControls() {
+    ocrText.disabled = isScanning;
     if (isScanning) {
       startButton.disabled = true;
       captureButton.disabled = true;
@@ -60,14 +56,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const videoRect = video.getBoundingClientRect();
     if (!videoRect.width || !videoRect.height) return null;
 
-    const boxRect = viewfinder
-      ? viewfinder.getBoundingClientRect()
-      : {
-          left: videoRect.left + videoRect.width * 0.12,
-          top: videoRect.top + videoRect.height * 0.22,
-          width: videoRect.width * 0.76,
-          height: videoRect.height * 0.56,
-        };
+    const boxRect = viewfinder.getBoundingClientRect();
+    const cropLeft = Math.max(boxRect.left, videoRect.left);
+    const cropTop = Math.max(boxRect.top, videoRect.top);
+    const cropRight = Math.min(boxRect.right, videoRect.right);
+    const cropBottom = Math.min(boxRect.bottom, videoRect.bottom);
+    if (cropRight <= cropLeft || cropBottom <= cropTop) return null;
 
     const coverScale = Math.max(
       videoRect.width / videoWidth,
@@ -78,16 +72,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const offsetX = (renderedWidth - videoRect.width) / 2;
     const offsetY = (renderedHeight - videoRect.height) / 2;
 
-    const sx = Math.max(0, Math.min(
-      videoWidth - 1,
-      Math.round((boxRect.left - videoRect.left + offsetX) / coverScale)
-    ));
-    const sy = Math.max(0, Math.min(
-      videoHeight - 1,
-      Math.round((boxRect.top - videoRect.top + offsetY) / coverScale)
-    ));
-    const sw = Math.max(1, Math.min(videoWidth - sx, Math.round(boxRect.width / coverScale)));
-    const sh = Math.max(1, Math.min(videoHeight - sy, Math.round(boxRect.height / coverScale)));
+    const sx = Math.max(0, Math.ceil((cropLeft - videoRect.left + offsetX) / coverScale));
+    const sy = Math.max(0, Math.ceil((cropTop - videoRect.top + offsetY) / coverScale));
+    const ex = Math.min(videoWidth, Math.floor((cropRight - videoRect.left + offsetX) / coverScale));
+    const ey = Math.min(videoHeight, Math.floor((cropBottom - videoRect.top + offsetY) / coverScale));
+    const sw = ex - sx;
+    const sh = ey - sy;
+    if (sw <= 0 || sh <= 0) return null;
 
     const canvas = document.createElement("canvas");
     canvas.width = sw;
@@ -96,97 +87,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!context) return null;
     context.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
     return canvas;
-  }
-
-  function extractName(lines) {
-    const usable = lines.map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
-    const labeled = usable.find((line) => /^(?:(?:full|complete)\s+)?name\s*[:=\-]\s*\S/i.test(line));
-    if (labeled) {
-      return labeled.replace(/^(?:(?:full|complete)\s+)?name\s*[:=\-]\s*/i, "").slice(0, 120);
-    }
-    const labelIndex = usable.findIndex((line) => /^(?:(?:full|complete)\s+)?name\s*[:=\-]?$/i.test(line));
-    if (labelIndex >= 0 && usable[labelIndex + 1]) {
-      return usable[labelIndex + 1].slice(0, 120);
-    }
-
-    const headerWords = /^(republic|philippines|identification|identity|card|license|licence|passport|national|government|date|birth|address|signature|surname|first|middle|name|sex|citizen|valid|until|mobile|phone|contact|number|nationality|citizenship)\b/i;
-    const nameParts = {};
-    for (let index = 0; index < usable.length; index += 1) {
-      const part = usable[index].match(/^(surname|last name|given name|first name|middle name)\s*[:=\-]?\s*(.*)$/i);
-      if (!part) continue;
-      const value = part[2] || usable[index + 1] || "";
-      if (value && !headerWords.test(value)) nameParts[part[1].toLowerCase()] = value;
-    }
-    const composedName = [
-      nameParts["given name"] || nameParts["first name"],
-      nameParts["middle name"],
-      nameParts.surname || nameParts["last name"],
-    ].filter(Boolean).join(" ");
-    if (composedName) return composedName.slice(0, 120);
-
-    return usable.find((line) =>
-      /^[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ ,.'-]{3,}$/i.test(line) &&
-      line.split(/\s+/).length >= 2 &&
-      !headerWords.test(line)
-    )?.slice(0, 120) || "";
-  }
-
-  function extractMobile(text) {
-    const lines = text.split(/\r?\n/);
-    const mobileLabel = /\b(?:mobile|cell(?:ular)?|phone|telephone|contact|tel\.?|cp|number|no\.?)\b/i;
-    const orderedLines = [
-      ...lines.filter((line) => mobileLabel.test(line)),
-      ...lines.filter((line) => !mobileLabel.test(line)),
-    ];
-
-    for (const line of orderedLines) {
-      const candidates = line.match(/[+()0-9OoQqIl|.\s-]{9,28}/g) || [];
-      for (const candidate of candidates) {
-        const digits = candidate
-          .replace(/[OoQq]/g, "0")
-          .replace(/[Il|]/g, "1")
-          .replace(/\D/g, "");
-        if (digits.length === 11 && digits.startsWith("09")) return digits;
-        if (digits.length === 12 && digits.startsWith("639")) return `+${digits}`;
-        if (digits.length === 10 && digits.startsWith("9")) return `0${digits}`;
-      }
-    }
-    return "";
-  }
-
-  function extractAddress(lines) {
-    const usable = lines.map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
-    const addressLabel = /^(?:(?:residential|present|permanent|current|home|residence|mailing|kasalukuyang|permanenteng)\s+)*(?:address|addr\.?|tirahan|residing\s+at)\b\s*[:=\-]?\s*(.*)$/i;
-    const nextFieldLabel = /^(?:full\s+name|complete\s+name|name|surname|last\s+name|given\s+name|first\s+name|middle\s+name|mobile|cell(?:ular)?|phone|contact|tel|cp|date\s+of\s+birth|birth\s+date|dob|petsa\s+ng\s+kapanganakan|sex|gender|kasarian|nationality|citizenship|nasyonalidad|id\s*(?:no|number)|license\s*(?:no|number)|expiry|expiration|valid\s+until)\b\s*[:=\-]?\s*/i;
-
-    for (let index = 0; index < usable.length; index += 1) {
-      const match = usable[index].match(addressLabel);
-      if (!match) continue;
-
-      const parts = match[1] ? [match[1]] : [];
-      for (let next = index + 1; next < usable.length; next += 1) {
-        if (addressLabel.test(usable[next]) || nextFieldLabel.test(usable[next])) break;
-        parts.push(usable[next]);
-      }
-
-      return parts.join(", ").replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 500);
-    }
-
-    const addressClue = /\b(?:brgy|barangay|purok|sitio|street|st|road|rd|avenue|ave|subdivision|village|municipality|city|province|district|zip)\b\.?/i;
-    const addressIndex = usable.findIndex((line) =>
-      addressClue.test(line) && !nextFieldLabel.test(line) &&
-      !/^(?:republic|philippines|national|government|identification)\b/i.test(line)
-    );
-    if (addressIndex >= 0) {
-      const parts = [usable[addressIndex]];
-      for (let next = addressIndex + 1; next < usable.length; next += 1) {
-        if (addressLabel.test(usable[next]) || nextFieldLabel.test(usable[next])) break;
-        if (!addressClue.test(usable[next])) break;
-        parts.push(usable[next]);
-      }
-      return parts.join(", ").slice(0, 500);
-    }
-    return "";
   }
 
   async function loadImage(source) {
@@ -264,29 +164,18 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         },
       });
-      const text = result.data.text.replace(/\u0000/g, "").trim();
-      const lines = text.split(/\r?\n/);
-      const detectedName = extractName(lines);
-      const detectedMobile = extractMobile(text);
-      const detectedAddress = extractAddress(lines);
-      ocrText.value = text.slice(0, 4000);
-      ocrTextDetails.hidden = !ocrText.value;
-      if (detectedName) nameInput.value = detectedName;
-      if (detectedMobile) mobileInput.value = detectedMobile;
-      if (detectedAddress) addressInput.value = detectedAddress;
-      const found = [
-        detectedName && "name",
-        detectedMobile && "mobile number",
-        detectedAddress && "address",
-      ].filter(Boolean);
-      scanMessage.textContent = found.length
-        ? `Suggested ${found.join(", ")}. Verify and correct the fields before saving.`
-        : text
-          ? "ID text was read, but the visitor details could not be matched automatically. Review the recognized text and fill in the fields."
-          : "No text was recognized. Try a clearer, well-lit image or enter the details manually.";
+      const text = result.data.text
+        .replace(/\u0000/g, "")
+        .split(/\r?\n/)
+        .map((line) => line.replace(/[ \t]+/g, " ").trim())
+        .filter(Boolean)
+        .join("\n");
+      ocrText.value = text;
+      scanMessage.textContent = text
+        ? "Text recognized. Review and edit the lines below; the OCR text is not included in the visit record."
+        : "No text was recognized. Try a clearer, well-lit image or enter the details manually.";
     } catch (error) {
       console.error("Could not read the visitor ID text.", error);
-      ocrTextDetails.hidden = true;
       scanMessage.textContent = "Could not read this ID. Try better lighting or enter the details manually.";
     } finally {
       isScanning = false;

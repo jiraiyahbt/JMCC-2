@@ -27,6 +27,13 @@ $assert(
         is_string($scannerLayout) && !str_contains($scannerLayout, 'jsQR.js'),
     'Visitor ID scanner uses printed-text OCR without loading QR decoding'
 );
+$assert(
+    is_string($scannerScript) &&
+        !str_contains($scannerScript, 'extractName') &&
+        !str_contains($scannerScript, 'visitorName') &&
+        !str_contains($scannerScript, 'visitorAddress'),
+    'Visitor ID OCR remains plain text instead of filling visitor record fields'
+);
 
 set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
     throw new ErrorException($message, 0, $severity, $file, $line);
@@ -111,15 +118,17 @@ ob_start();
 require __DIR__ . '/../templates/verify_visitor.php';
 $visitorFormHtml = ob_get_clean();
 restore_error_handler();
+$ocrTextareaAttributes = [];
 $assert(
     str_contains($visitorFormHtml, 'Possible duplicate visitor') &&
         str_contains($visitorFormHtml, '&lt;Test Visitor&gt;') &&
         str_contains($visitorFormHtml, '&lt;Test Address&gt;') &&
-        str_contains($visitorFormHtml, 'id="ocrTextDetails"') &&
         str_contains($visitorFormHtml, 'id="recognizedIdText"') &&
-        preg_match('/<textarea id="recognizedIdText"[^>]*name=/s', $visitorFormHtml) !== 1 &&
+        preg_match('/<textarea id="recognizedIdText"([^>]*)>/', $visitorFormHtml, $ocrTextareaAttributes) === 1 &&
+        !str_contains($ocrTextareaAttributes[1], 'readonly') &&
+        !str_contains($ocrTextareaAttributes[1], 'name=') &&
         str_contains($visitorFormHtml, 'Please confirm the separate active visit.'),
-    'Visitor verification form safely renders errors, submitted values, and an unsubmitted OCR text preview'
+    'Visitor verification form safely renders errors and an editable OCR text area separate from submitted fields'
 );
 
 $name = null;

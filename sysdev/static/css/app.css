@@ -150,14 +150,14 @@ td small { margin-top: 4px; font-size: 11px; }
 .filter-card .filter-bar { margin-top: 18px; }
 .scanner-card { margin: 18px 0; padding: 18px; }
 .scanner-preview { position: relative; min-height: 230px; overflow: hidden; display: grid; place-items: center; border-radius: 8px; background: #122a3e; color: white; text-align: center; }
-.scanner-preview video { width: 100%; max-height: 360px; object-fit: cover; }
+.scanner-preview video { width: 100%; max-height: 360px; object-fit: cover; object-position: center; transform: none; }
 .id-viewfinder { position: absolute; z-index: 1; top: 50%; left: 50%; width: min(80%, 520px); aspect-ratio: 1.586; transform: translate(-50%, -50%); border: 2px solid #fff; border-radius: 12px; box-shadow: 0 0 0 9999px rgb(0 0 0 / 28%); pointer-events: none; }
+.id-viewfinder-hint { position: absolute; top: 8px; left: 8px; right: 8px; padding: 4px 6px; border-radius: 4px; background: rgb(18 42 62 / 82%); color: white; font-size: 12px; line-height: 1.3; }
 .scanner-preview p { position: absolute; inset: auto 16px 10px; padding: 6px; border-radius: 4px; background: rgb(0 0 0 / 55%); color: white; font-size: 13px; }
 .scanner-preview video { display: block; min-height: 230px; }
 .scanner-card progress { width: 100%; margin-top: 12px; accent-color: var(--blue); }
-.ocr-text { margin-top: 12px; }
-.ocr-text summary { cursor: pointer; color: var(--blue); font-weight: 600; }
-.ocr-text textarea { width: 100%; margin-top: 8px; font-family: inherit; }
+.ocr-text-label { display: grid; gap: 8px; margin-top: 12px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.ocr-text-label textarea { width: 100%; min-height: 160px; font-family: Consolas, "Courier New", monospace; font-size: 13px; font-weight: 400; }
 .lookup-form { margin-bottom: 18px; padding: 18px; }
 .input-action { display: flex; gap: 8px; }
 .input-action input { flex: 1; }
