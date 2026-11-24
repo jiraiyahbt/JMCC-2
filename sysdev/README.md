@@ -1,13 +1,13 @@
 # SafeGate
 
-SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a phone or tablet camera to scan a visitor ID. OCR suggests a name and mobile number in the browser, and the guard verifies the details before recording a visit. The ID image is not uploaded or saved. The school continues using its existing visitor-pass and flap-barrier process.
+SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a camera or image file to read printed visitor-ID text in the browser. OCR suggests a name, mobile number, and labeled address for the guard to verify before recording a visit. QR codes are not scanned. The ID image is not uploaded or saved. The school continues using its existing visitor-pass and flap-barrier process.
 
 ## Requirements
 
 - PHP 8.1 or newer with `pdo_mysql` enabled
 - MySQL 8.0.16 or newer
 - Apache with `mod_rewrite`, or PHP's development server for local testing
-- An internet connection on the scanning device (needed to load the OCR library, see "Camera and OCR")
+- Camera access requires HTTPS or localhost.
 
 ## Create the database
 
@@ -104,11 +104,12 @@ instance/
 ## Camera and OCR
 
 - Camera scanning requires HTTPS or `localhost`.
-- QR decoding and OCR run in the browser using jsQR and Tesseract.js. The QR reader recognizes plain `name`/`full_name`/`visitor_name` and `mobile`/`phone` fields, including labeled text or a flat JSON object. Other QR formats may not produce suggestions.
-- QR contents are treated only as data. Links are not opened, and QR data is not sent to the server by the scanner.
+- Printed-text OCR runs in the browser using Tesseract.js; QR codes are not read by the visitor-ID scanner.
+- OCR suggests name and mobile number and only suggests an address when it recognizes a printed `Address` or `Tirahan` label. ID layouts vary; the guard must verify or correct all suggestions. Destination and purpose must be entered manually.
 - If local recognition assets are unavailable or scanning fails, guards can still enter details manually.
-- jsQR and Tesseract.js, workers, language data, and WebAssembly assets are served locally from `static/vendor`, so scanning does not require an external CDN. Keep the bundled third-party assets and license notices with the approved school deployment.
+- Tesseract.js, its worker, language data, and WebAssembly assets are served locally from `static/vendor/tesseract`. Keep the bundled third-party assets with the approved school deployment.
 - The captured ID image is never submitted to the server.
+- The optional visitor address is saved with the visit record. Collect and retain it only if approved by the school.
 
 ## Privacy
 

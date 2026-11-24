@@ -44,7 +44,7 @@ $visits = isset($visits) && is_array($visits) ? $visits : [];
         <tbody>
           <?php foreach ($visits as $visit): ?>
             <tr>
-              <td><strong><?= h($visit['visitor_name']) ?></strong><small><?= h($visit['mobile_number'] ?: 'Mobile not recorded') ?></small></td>
+              <td><strong><?= h($visit['visitor_name']) ?></strong><small><?= h($visit['mobile_number'] ?: 'Mobile not recorded') ?></small><?php if (!empty($visit['visitor_address'])): ?><small><?= h($visit['visitor_address']) ?></small><?php endif; ?></td>
               <td><?= h($visit['destination']) ?><small><?= h($visit['purpose']) ?></small></td>
               <td><?= h($visit['entry_time']) ?><small><?= h($visit['entrance_name']) ?></small></td>
               <td><?= h($visit['exit_time'] ?: '—') ?><?php if ($visit['exit_entrance_name']): ?><small><?= h($visit['exit_entrance_name']) ?></small><?php endif; ?></td>

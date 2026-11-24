@@ -40,7 +40,7 @@ $total_records = $total_records ?? count($records);
       <thead><tr><th>Visitor / mobile</th><th>Person or office / purpose</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Entrance / guard</th></tr></thead>
       <tbody><?php foreach ($records as $record): ?>
         <tr>
-          <td><strong><?= h($record['visitor_name']) ?></strong><small><?= h($record['mobile_number'] ?: 'Mobile not recorded') ?></small></td>
+          <td><strong><?= h($record['visitor_name']) ?></strong><small><?= h($record['mobile_number'] ?: 'Mobile not recorded') ?></small><?php if (!empty($record['visitor_address'])): ?><small><?= h($record['visitor_address']) ?></small><?php endif; ?></td>
           <td><?= h($record['destination']) ?><small><?= h($record['purpose']) ?></small></td>
           <td><?= h($record['entry_time'] ?: '—') ?></td>
           <td><?= h($record['exit_time'] ?: '—') ?></td>

@@ -17,11 +17,12 @@ $history = array_values(array_filter($history, 'is_array'));
   <section class="card table-card">
     <?php if ($history): ?>
       <div class="table-wrap"><table>
-        <thead><tr><th>Entry / exit</th><th>Destination / purpose</th><th>Entrance</th><th>Status</th><th>Pass reference</th></tr></thead>
+        <thead><tr><th>Entry / exit</th><th>Visitor address</th><th>Destination / purpose</th><th>Entrance</th><th>Status</th><th>Pass reference</th></tr></thead>
         <tbody>
           <?php foreach ($history as $visit): ?>
             <tr>
               <td><strong><?= h($visit['entry_time'] ?? '') ?></strong><small><?= h(($visit['exit_time'] ?? '') ?: 'Not exited') ?></small></td>
+              <td><?= h($visit['visitor_address'] ?? '—') ?></td>
               <td><?= h($visit['destination'] ?? '') ?><small><?= h($visit['purpose'] ?? '') ?></small></td>
               <td><?= h($visit['entrance_name'] ?? '') ?><?php if (!empty($visit['exit_entrance_name'])): ?><small>Out: <?= h($visit['exit_entrance_name']) ?></small><?php endif; ?></td>
               <td><span class="badge badge-<?= h(status_class((string) ($visit['status'] ?? ''))) ?>"><?= h($visit['status'] ?? '') ?></span></td>

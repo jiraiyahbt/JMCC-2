@@ -20,6 +20,13 @@ $assert(status_class('Inside campus') === 'inside-campus', 'Status CSS names are
 $assert(csv_safe('=SUM(A1:A2)') === "'=SUM(A1:A2)", 'CSV formula injection is neutralized');
 $assert(csv_safe('Maria Santos') === 'Maria Santos', 'Normal CSV values are unchanged');
 $assert(campus_date() === date('Y-m-d'), 'Campus date uses the application timezone');
+$scannerScript = file_get_contents(__DIR__ . '/../static/js/id_scan.js');
+$scannerLayout = file_get_contents(__DIR__ . '/../templates/base.php');
+$assert(
+    is_string($scannerScript) && !str_contains($scannerScript, 'decodeQr') &&
+        is_string($scannerLayout) && !str_contains($scannerLayout, 'jsQR.js'),
+    'Visitor ID scanner uses printed-text OCR without loading QR decoding'
+);
 
 set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
     throw new ErrorException($message, 0, $severity, $file, $line);
@@ -91,6 +98,7 @@ $entrance = ENTRANCES[0];
 $form_data = [
     'visitor_name' => '<Test Visitor>',
     'mobile_number' => '',
+    'visitor_address' => '<Test Address>',
     'destination' => 'Reception',
     'purpose' => 'Meeting',
 ];
@@ -106,6 +114,7 @@ restore_error_handler();
 $assert(
     str_contains($visitorFormHtml, 'Possible duplicate visitor') &&
         str_contains($visitorFormHtml, '&lt;Test Visitor&gt;') &&
+        str_contains($visitorFormHtml, '&lt;Test Address&gt;') &&
         str_contains($visitorFormHtml, 'Please confirm the separate active visit.'),
     'Visitor verification form safely renders errors, duplicate warnings, and submitted values'
 );
@@ -130,6 +139,7 @@ $mobile = '';
 $history = [[
     'entry_time' => '2026-11-23 09:00:00',
     'status' => 'Inside campus',
+    'visitor_address' => '12 Sample Street',
 ]];
 set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
     throw new ErrorException($message, 0, $severity, $file, $line);
@@ -140,7 +150,8 @@ $historyResultsHtml = ob_get_clean();
 restore_error_handler();
 $assert(
     str_contains($historyResultsHtml, 'Test Visitor') &&
-        str_contains($historyResultsHtml, 'Not exited'),
+        str_contains($historyResultsHtml, 'Not exited') &&
+        str_contains($historyResultsHtml, '12 Sample Street'),
     'Visitor history safely renders results with optional fields missing'
 );
 

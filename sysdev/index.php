@@ -87,7 +87,7 @@ function record_rows(array $filters, int $limit = 500, int $offset = 0): array
         ? 'LIMIT ' . max(1, min($limit, 10000)) . ' OFFSET ' . max(0, $offset)
         : '';
     $statement = db()->prepare(
-        "SELECT vl.visit_id, vl.visitor_name, vl.mobile_number, vl.destination,
+        "SELECT vl.visit_id, vl.visitor_name, vl.mobile_number, vl.visitor_address, vl.destination,
                 vl.purpose, vl.status, vl.entrance_name, vl.exit_entrance_name,
                 vl.entry_time, vl.exit_time, vl.pass_reference,
                 entry_guard.full_name AS entry_guard_name,
@@ -153,7 +153,7 @@ function visitor_history(string $name, ?string $mobile = null): array
 {
     if ($mobile) {
         $statement = db()->prepare(
-            'SELECT visit_id, visitor_name, mobile_number, destination, purpose,
+            'SELECT visit_id, visitor_name, mobile_number, visitor_address, destination, purpose,
                     entrance_name, exit_entrance_name, entry_time, exit_time, status, pass_reference
              FROM visitor_log_entries
              WHERE visitor_name = ? OR mobile_number = ?
@@ -162,7 +162,7 @@ function visitor_history(string $name, ?string $mobile = null): array
         $statement->execute([$name, $mobile]);
     } else {
         $statement = db()->prepare(
-            'SELECT visit_id, visitor_name, mobile_number, destination, purpose,
+            'SELECT visit_id, visitor_name, mobile_number, visitor_address, destination, purpose,
                     entrance_name, exit_entrance_name, entry_time, exit_time, status, pass_reference
              FROM visitor_log_entries
              WHERE visitor_name = ?
@@ -204,6 +204,18 @@ function run_migrations_command(): never
             'ALTER TABLE visitor_log_entries
              ADD COLUMN pass_reference VARCHAR(32) NULL AFTER visit_id,
              ADD UNIQUE KEY uq_visitor_pass_reference (pass_reference)'
+        );
+    }
+    $addressColumn = db()->query(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'visitor_log_entries'
+           AND COLUMN_NAME = 'visitor_address'"
+    )->fetchColumn();
+    if ((int) $addressColumn === 0) {
+        db()->exec(
+            'ALTER TABLE visitor_log_entries
+             ADD COLUMN visitor_address VARCHAR(500) NULL AFTER mobile_number'
         );
     }
     fwrite(STDOUT, "SafeGate database migrations applied.\n");
@@ -422,7 +434,7 @@ if (PHP_SAPI !== 'cli') {
         $statement->execute([$today]);
         $visitsToday = (int) $statement->fetchColumn();
         $statement = db()->prepare(
-            "SELECT visit_id, visitor_name, mobile_number, destination, purpose,
+            "SELECT visit_id, visitor_name, mobile_number, visitor_address, destination, purpose,
                     entrance_name, exit_entrance_name, entry_time, exit_time, status, pass_reference
              FROM visitor_log_entries
              WHERE DATE(entry_time) = ? OR status = 'Inside campus'
@@ -463,6 +475,7 @@ if (PHP_SAPI !== 'cli') {
         $formData = [
             'visitor_name' => post_value('visitor_name'),
             'mobile_number' => post_value('mobile_number'),
+            'visitor_address' => post_value('visitor_address'),
             'destination' => post_value('destination'),
             'purpose' => post_value('purpose'),
         ];
@@ -486,6 +499,9 @@ if (PHP_SAPI !== 'cli') {
                 !preg_match('/^[+0-9][0-9()\-\s]{6,19}$/', $formData['mobile_number'])) {
                 $errors[] = 'Enter a valid mobile number or leave it blank.';
             }
+            if (preg_match('/\A.{0,500}\z/us', $formData['visitor_address']) !== 1) {
+                $errors[] = 'Visitor address must be 500 characters or fewer.';
+            }
             if (strlen($formData['destination']) < 1 || strlen($formData['destination']) > 100) {
                 $errors[] = 'Person or office visited is required and must be 100 characters or fewer.';
             }
@@ -508,14 +524,15 @@ if (PHP_SAPI !== 'cli') {
             if (!$errors) {
                 $statement = db()->prepare(
                     "INSERT INTO visitor_log_entries
-                     (pass_reference, visitor_name, mobile_number, destination, purpose, entrance_name,
+                     (pass_reference, visitor_name, mobile_number, visitor_address, destination, purpose, entrance_name,
                       entry_guard_id, entry_time, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Inside campus')"
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Inside campus')"
                 );
                 $statement->execute([
                     create_pass_reference(),
                     $formData['visitor_name'],
                     $formData['mobile_number'] ?: null,
+                    $formData['visitor_address'] ?: null,
                     $formData['destination'],
                     $formData['purpose'],
                     $entrance,
@@ -655,7 +672,7 @@ if (PHP_SAPI !== 'cli') {
         fputcsv($output, [
             'Visitor', 'Mobile', 'Person or office visited', 'Visit purpose', 'Check-in',
             'Check-in entrance', 'Check-in guard', 'Check-out', 'Check-out entrance',
-            'Check-out guard', 'Status', 'Pass reference',
+            'Check-out guard', 'Status', 'Pass reference', 'Visitor address',
         ]);
         foreach (record_rows($filters, 0) as $record) {
             fputcsv($output, array_map('csv_safe', [
@@ -671,6 +688,7 @@ if (PHP_SAPI !== 'cli') {
                 $record['exit_guard_name'] ?? '',
                 $record['status'],
                 $record['pass_reference'] ?? '',
+                $record['visitor_address'] ?? '',
             ]));
         }
         fclose($output);

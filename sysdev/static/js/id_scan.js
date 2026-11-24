@@ -9,12 +9,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const imageInput = document.getElementById("idImageInput");
   const nameInput = document.getElementById("visitorName");
   const mobileInput = document.getElementById("mobileNumber");
+  const addressInput = document.getElementById("visitorAddress");
   const cameraMessage = document.getElementById("cameraMessage");
   const scanMessage = document.getElementById("scanMessage");
   const progress = document.getElementById("ocrProgress");
 
   if (!video || !startButton || !captureButton || !chooseButton || !stopButton ||
-      !imageInput || !nameInput || !mobileInput || !cameraMessage || !scanMessage || !progress) {
+      !imageInput || !nameInput || !mobileInput || !addressInput ||
+      !cameraMessage || !scanMessage || !progress) {
     return;
   }
 
@@ -61,146 +63,69 @@ document.addEventListener("DOMContentLoaded", () => {
     return "";
   }
 
-  function parseQrFields(payload) {
-    const value = payload.trim();
-    if (/^(?:https?:\/\/|www\.)/i.test(value)) {
-      return { name: "", mobile: "", isLink: true };
-    }
+  function extractAddress(lines) {
+    const usable = lines.map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+    const addressLabel = /^(?:(?:residential|present|permanent|current|kasalukuyang|permanenteng)\s+)?(?:home\s+)?(?:address|tirahan)\b\s*[:=\-]?\s*(.*)$/i;
+    const nextFieldLabel = /^(?:full\s+name|name|surname|given\s+name|mobile|phone|tel|date\s+of\s+birth|birth\s+date|dob|petsa\s+ng\s+kapanganakan|sex|gender|kasarian|nationality|citizenship|nasyonalidad|id\s*(?:no|number)|license\s*(?:no|number)|expiry|expiration|valid\s+until)\b\s*[:=\-]?\s*/i;
 
-    let fields = {};
-    try {
-      const parsed = JSON.parse(value);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        fields = Object.fromEntries(
-          Object.entries(parsed).map(([key, item]) => [
-            key.toLowerCase().replace(/[^a-z0-9]/g, ""),
-            typeof item === "string" || typeof item === "number" ? String(item) : "",
-          ])
-        );
+    for (let index = 0; index < usable.length; index += 1) {
+      const match = usable[index].match(addressLabel);
+      if (!match) continue;
+
+      const parts = match[1] ? [match[1]] : [];
+      for (let next = index + 1; next < usable.length; next += 1) {
+        if (addressLabel.test(usable[next]) || nextFieldLabel.test(usable[next])) break;
+        parts.push(usable[next]);
       }
-    } catch {
-      // QR contents may be plain labeled text rather than JSON.
+
+      return parts.join(", ").replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 500);
     }
-
-    const pick = (aliases) => {
-      for (const alias of aliases) {
-        if (fields[alias]) return fields[alias].trim();
-      }
-      return "";
-    };
-    const nameMatch = value.match(/^(?:full[\s_-]*name|visitor[\s_-]*name|name)\s*[:=]\s*(.+)$/im);
-    const mobileMatch = value.match(/^(?:mobile(?:[\s_-]*number)?|phone(?:[\s_-]*number)?|tel)\s*[:=]\s*(.+)$/im);
-    const name = (pick(["fullname", "visitorname", "name"]) || nameMatch?.[1] || "")
-      .replace(/[\u0000-\u001f\u007f]/g, "")
-      .trim()
-      .slice(0, 120);
-    let mobile = (pick(["mobilenumber", "mobile", "phonenumber", "phone", "tel"]) ||
-      mobileMatch?.[1] || "").replace(/[\u0000-\u001f\u007f]/g, "").trim();
-    if (!mobile) mobile = extractMobile(value);
-    if (!/^[+0-9][0-9()\-\s]{6,19}$/.test(mobile)) mobile = "";
-
-    return { name, mobile, isLink: false };
-  }
-
-  async function decodeQr(source) {
-    if (typeof window.jsQR !== "function") return null;
-
-    let image = source;
-    let bitmap = null;
-    try {
-      if (source instanceof Blob) {
-        if (typeof createImageBitmap !== "function") return null;
-        bitmap = await createImageBitmap(source);
-        image = bitmap;
-      }
-      const width = image.videoWidth || image.naturalWidth || image.width;
-      const height = image.videoHeight || image.naturalHeight || image.height;
-      if (!width || !height) return null;
-
-      const scale = Math.min(1, 1600 / Math.max(width, height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(width * scale));
-      canvas.height = Math.max(1, Math.round(height * scale));
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      if (!context) return null;
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      return window.jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "attemptBoth",
-      })?.data ?? null;
-    } finally {
-      if (bitmap) bitmap.close();
-    }
+    return "";
   }
 
   async function readImage(source) {
-    scanMessage.textContent = "Checking the QR code and reading the ID locally…";
+    if (!window.Tesseract?.recognize) {
+      scanMessage.textContent = "Text recognition could not be loaded. Refresh the page or enter the details manually.";
+      return;
+    }
+    scanMessage.textContent = "Reading printed ID text locally in this browser…";
     progress.hidden = false;
     progress.value = 0;
     startButton.disabled = true;
     captureButton.disabled = true;
     chooseButton.disabled = true;
 
-    let qrFound = false;
-    let qrFields = { name: "", mobile: "", isLink: false };
     try {
-      try {
-        const payload = await decodeQr(source);
-        if (payload !== null) {
-          qrFound = true;
-          qrFields = parseQrFields(payload);
-        }
-      } catch (error) {
-        console.error("Could not decode the visitor ID QR code.", error);
-      }
-
-      if (qrFields.name) nameInput.value = qrFields.name;
-      if (qrFields.mobile) mobileInput.value = qrFields.mobile;
-
-      let detectedName = "";
-      let detectedMobile = "";
-      if (window.Tesseract?.recognize) {
-        try {
-          const result = await window.Tesseract.recognize(source, "eng", {
-            workerPath: "/static/vendor/tesseract/worker.min.js",
-            corePath: "/static/vendor/tesseract/core/",
-            langPath: "/static/vendor/tesseract/lang/",
-            workerBlobURL: false,
-            gzip: true,
-            logger: (event) => {
-              if (event.status === "recognizing text" && Number.isFinite(event.progress)) {
-                progress.value = Math.round(event.progress * 100);
-              }
-            },
-          });
-          const lines = result.data.text.split(/\r?\n/);
-          detectedName = extractName(lines);
-          detectedMobile = extractMobile(result.data.text);
-        } catch (error) {
-          console.error("Could not read the visitor ID text.", error);
-          if (!qrFields.name && !qrFields.mobile) {
-            scanMessage.textContent = "Could not read this ID. Try better lighting or enter the details manually.";
+      const result = await window.Tesseract.recognize(source, "eng", {
+        workerPath: "/static/vendor/tesseract/worker.min.js",
+        corePath: "/static/vendor/tesseract/core/",
+        langPath: "/static/vendor/tesseract/lang/",
+        workerBlobURL: false,
+        gzip: true,
+        logger: (event) => {
+          if (event.status === "recognizing text" && Number.isFinite(event.progress)) {
+            progress.value = Math.round(event.progress * 100);
           }
-        }
-      } else if (!qrFields.name && !qrFields.mobile) {
-        scanMessage.textContent = "Text recognition could not be loaded. Refresh the page or enter the details manually.";
-      }
-
-      if (detectedName && !qrFields.name) nameInput.value = detectedName;
-      if (detectedMobile && !qrFields.mobile) mobileInput.value = detectedMobile;
+        },
+      });
+      const lines = result.data.text.split(/\r?\n/);
+      const detectedName = extractName(lines);
+      const detectedMobile = extractMobile(result.data.text);
+      const detectedAddress = extractAddress(lines);
+      if (detectedName) nameInput.value = detectedName;
+      if (detectedMobile) mobileInput.value = detectedMobile;
+      if (detectedAddress) addressInput.value = detectedAddress;
       const found = [
-        (qrFields.name || detectedName) && "name",
-        (qrFields.mobile || detectedMobile) && "mobile number",
+        detectedName && "name",
+        detectedMobile && "mobile number",
+        detectedAddress && "address",
       ].filter(Boolean);
-      if (found.length) {
-        scanMessage.textContent = `Suggested ${found.join(" and ")}. Verify and correct the fields before saving.`;
-      } else if (qrFound && qrFields.isLink) {
-        scanMessage.textContent = "A QR link was detected but not opened. Verify the ID and enter details manually.";
-      } else if (qrFound) {
-        scanMessage.textContent = "A QR code was found, but its data format was not recognized. Verify the ID and enter details manually.";
-      } else if (window.Tesseract?.recognize) {
-        scanMessage.textContent = "No name or mobile number was recognized. Fill in the fields and verify them against the ID.";
-      }
+      scanMessage.textContent = found.length
+        ? `Suggested ${found.join(", ")}. Verify and correct the fields before saving.`
+        : "No name, mobile number, or labeled address was recognized. Fill in the fields and verify them against the ID.";
+    } catch (error) {
+      console.error("Could not read the visitor ID text.", error);
+      scanMessage.textContent = "Could not read this ID. Try better lighting or enter the details manually.";
     } finally {
       progress.hidden = true;
       chooseButton.disabled = false;
