@@ -164,15 +164,10 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         },
       });
-      const text = result.data.text
-        .replace(/\u0000/g, "")
-        .split(/\r?\n/)
-        .map((line) => line.replace(/[ \t]+/g, " ").trim())
-        .filter(Boolean)
-        .join("\n");
+      const text = result.data.text.replace(/\r\n?/g, "\n");
       ocrText.value = text;
       scanMessage.textContent = text
-        ? "Text recognized. Review and edit the lines below; the OCR text is not included in the visit record."
+        ? "Text recognized and copied into the visit form. Review or edit it before recording the visit."
         : "No text was recognized. Try a clearer, well-lit image or enter the details manually.";
     } catch (error) {
       console.error("Could not read the visitor ID text.", error);

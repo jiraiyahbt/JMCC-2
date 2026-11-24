@@ -106,10 +106,11 @@ instance/
 - Camera scanning requires HTTPS or `localhost`.
 - Printed-text OCR runs in the browser using Tesseract.js; QR codes are not read by the visitor-ID scanner.
 - Camera capture is cropped to the visible ID viewfinder, then grayscaled and contrast-enhanced on a canvas before OCR. The camera preview and canvas are not mirrored. Uploaded images are OCR'd in full.
-- OCR output appears line-by-line in one editable text area. It is not parsed into visitor fields or submitted with the visit; the guard reviews it and manually enters the required visitor details into the form. OCR can miss or misread text, so verify all details against the physical ID.
+- OCR output appears line-by-line in one editable text area inside the visit form. It is not parsed into separate fields; the full text is submitted with the form and stored in `visitor_log_entries.visitor_id_text`. The guard must fill the structured visitor fields and verify all information against the physical ID. OCR can miss or misread text.
 - If local recognition assets are unavailable or scanning fails, guards can still enter details manually.
 - Tesseract.js, its worker, language data, and WebAssembly assets are served locally from `static/vendor/tesseract`. Keep the bundled third-party assets with the approved school deployment.
 - The captured ID image is never submitted to the server.
+- The complete OCR text can contain sensitive ID details. Store it only with school approval and protect it under the visitor-record retention policy; it is deleted when its visit record is purged.
 - The optional visitor address is saved with the visit record. Collect and retain it only if approved by the school.
 
 ## Privacy

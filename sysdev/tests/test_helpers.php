@@ -22,6 +22,8 @@ $assert(csv_safe('Maria Santos') === 'Maria Santos', 'Normal CSV values are unch
 $assert(campus_date() === date('Y-m-d'), 'Campus date uses the application timezone');
 $scannerScript = file_get_contents(__DIR__ . '/../static/js/id_scan.js');
 $scannerLayout = file_get_contents(__DIR__ . '/../templates/base.php');
+$visitorController = file_get_contents(__DIR__ . '/../index.php');
+$mysqlSchema = file_get_contents(__DIR__ . '/../schema_mysql.sql');
 $assert(
     is_string($scannerScript) && !str_contains($scannerScript, 'decodeQr') &&
         is_string($scannerLayout) && !str_contains($scannerLayout, 'jsQR.js'),
@@ -30,9 +32,17 @@ $assert(
 $assert(
     is_string($scannerScript) &&
         !str_contains($scannerScript, 'extractName') &&
-        !str_contains($scannerScript, 'visitorName') &&
-        !str_contains($scannerScript, 'visitorAddress'),
-    'Visitor ID OCR remains plain text instead of filling visitor record fields'
+        !str_contains($scannerScript, 'extractMobile') &&
+        !str_contains($scannerScript, 'extractAddress') &&
+        str_contains($scannerScript, 'ocrText.value = text'),
+    'Visitor ID OCR transfers unparsed full text to the visit form'
+);
+$assert(
+    is_string($visitorController) &&
+        is_string($mysqlSchema) &&
+        str_contains($visitorController, 'visitor_id_text') &&
+        str_contains($mysqlSchema, 'visitor_id_text TEXT NULL'),
+    'Visitor check-in POST persists the full OCR text in the visit schema'
 );
 
 set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
@@ -106,6 +116,7 @@ $form_data = [
     'visitor_name' => '<Test Visitor>',
     'mobile_number' => '',
     'visitor_address' => '<Test Address>',
+    'visitor_id_text' => "FULL NAME: <Test Visitor>\nADDRESS: <Test Address>",
     'destination' => 'Reception',
     'purpose' => 'Meeting',
 ];
@@ -123,12 +134,13 @@ $assert(
     str_contains($visitorFormHtml, 'Possible duplicate visitor') &&
         str_contains($visitorFormHtml, '&lt;Test Visitor&gt;') &&
         str_contains($visitorFormHtml, '&lt;Test Address&gt;') &&
+    str_contains($visitorFormHtml, "FULL NAME: &lt;Test Visitor&gt;\nADDRESS: &lt;Test Address&gt;") &&
         str_contains($visitorFormHtml, 'id="recognizedIdText"') &&
         preg_match('/<textarea id="recognizedIdText"([^>]*)>/', $visitorFormHtml, $ocrTextareaAttributes) === 1 &&
         !str_contains($ocrTextareaAttributes[1], 'readonly') &&
-        !str_contains($ocrTextareaAttributes[1], 'name=') &&
+    str_contains($ocrTextareaAttributes[1], 'name="visitor_id_text"') &&
         str_contains($visitorFormHtml, 'Please confirm the separate active visit.'),
-    'Visitor verification form safely renders errors and an editable OCR text area separate from submitted fields'
+    'Visitor verification form safely renders an editable, escaped OCR text field submitted with the visit'
 );
 
 $name = null;

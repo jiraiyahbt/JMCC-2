@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS visitor_log_entries (
     visitor_name VARCHAR(120) NOT NULL,
     mobile_number VARCHAR(20) NULL,
     visitor_address VARCHAR(500) NULL,
+    visitor_id_text TEXT NULL,
     destination VARCHAR(100) NOT NULL,
     purpose VARCHAR(255) NOT NULL,
     entrance_name VARCHAR(100) NOT NULL,

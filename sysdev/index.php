@@ -218,6 +218,18 @@ function run_migrations_command(): never
              ADD COLUMN visitor_address VARCHAR(500) NULL AFTER mobile_number'
         );
     }
+    $ocrTextColumn = db()->query(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'visitor_log_entries'
+           AND COLUMN_NAME = 'visitor_id_text'"
+    )->fetchColumn();
+    if ((int) $ocrTextColumn === 0) {
+        db()->exec(
+            'ALTER TABLE visitor_log_entries
+             ADD COLUMN visitor_id_text TEXT NULL AFTER visitor_address'
+        );
+    }
     fwrite(STDOUT, "SafeGate database migrations applied.\n");
     exit(0);
 }
@@ -472,10 +484,12 @@ if (PHP_SAPI !== 'cli') {
         if (!in_array($entrance, $entrances, true)) {
             $entrance = ENTRANCES[0];
         }
+        $submittedOcrText = $_POST['visitor_id_text'] ?? '';
         $formData = [
             'visitor_name' => post_value('visitor_name'),
             'mobile_number' => post_value('mobile_number'),
             'visitor_address' => post_value('visitor_address'),
+            'visitor_id_text' => is_string($submittedOcrText) ? $submittedOcrText : '',
             'destination' => post_value('destination'),
             'purpose' => post_value('purpose'),
         ];
@@ -502,6 +516,11 @@ if (PHP_SAPI !== 'cli') {
             if (preg_match('/\A.{0,500}\z/us', $formData['visitor_address']) !== 1) {
                 $errors[] = 'Visitor address must be 500 characters or fewer.';
             }
+            if (!is_string($submittedOcrText)) {
+                $errors[] = 'Recognized ID text must be plain text.';
+            } elseif (strlen($formData['visitor_id_text']) > 65535) {
+                $errors[] = 'Recognized ID text must be 65 KB or fewer.';
+            }
             if (strlen($formData['destination']) < 1 || strlen($formData['destination']) > 100) {
                 $errors[] = 'Person or office visited is required and must be 100 characters or fewer.';
             }
@@ -524,15 +543,16 @@ if (PHP_SAPI !== 'cli') {
             if (!$errors) {
                 $statement = db()->prepare(
                     "INSERT INTO visitor_log_entries
-                     (pass_reference, visitor_name, mobile_number, visitor_address, destination, purpose, entrance_name,
-                      entry_guard_id, entry_time, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Inside campus')"
+                     (pass_reference, visitor_name, mobile_number, visitor_address, visitor_id_text,
+                      destination, purpose, entrance_name, entry_guard_id, entry_time, status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Inside campus')"
                 );
                 $statement->execute([
                     create_pass_reference(),
                     $formData['visitor_name'],
                     $formData['mobile_number'] ?: null,
                     $formData['visitor_address'] ?: null,
+                    $formData['visitor_id_text'] !== '' ? $formData['visitor_id_text'] : null,
                     $formData['destination'],
                     $formData['purpose'],
                     $entrance,
