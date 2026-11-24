@@ -21,7 +21,7 @@ $duplicates = isset($duplicates) && is_array($duplicates) ? $duplicates : [];
   <a class="back-link" href="<?= h(url('/guard', ['entrance' => $entrance])) ?>">← Back to visitor log</a>
   <p class="eyebrow">Gate operations / check in</p>
   <h1>Scan visitor ID</h1>
-  <p class="lead">Capture the printed ID with the guard's device. Text recognition runs locally in this browser; the ID image is not uploaded or saved. Review the suggested name, mobile number, and address before recording the visit.</p>
+  <p class="lead">Capture the printed ID with the guard's device. Text recognition runs locally in this browser; the ID image is not uploaded or saved. The scanner shows all recognized text and suggests visitor details when it can match them. Verify the suggestions before recording the visit.</p>
   <?php if (!empty($errors)): ?><div class="flash flash-error"><ul><?php foreach ($errors as $error): ?><li><?= h($error) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
   <section class="card scanner-card">
     <div class="scanner-preview"><video id="idVideo" autoplay muted playsinline></video><div id="idViewfinder" class="id-viewfinder" aria-hidden="true"></div><p id="cameraMessage">Open the camera and align the printed ID inside the frame.</p></div>
@@ -34,12 +34,17 @@ $duplicates = isset($duplicates) && is_array($duplicates) ? $duplicates : [];
     <input id="idImageInput" type="file" accept="image/*" capture="environment" hidden>
     <progress id="ocrProgress" max="100" value="0" hidden></progress>
     <p class="muted" id="scanMessage" aria-live="polite"></p>
+    <details id="ocrTextDetails" class="ocr-text" hidden>
+      <summary>View all text recognized on the ID</summary>
+      <textarea id="recognizedIdText" rows="6" readonly aria-label="All text recognized on the ID"></textarea>
+      <p class="muted">This text stays in this page and is not included in the visit record.</p>
+    </details>
   </section>
   <form class="card form-card stack-form" id="checkInForm" method="post" action="<?= h(url('/guard/verify', ['entrance' => $entrance])) ?>">
     <?php csrf_field(); ?>
     <input type="hidden" name="action" value="check_in">
     <h2>Review and record visit</h2>
-    <p class="muted">OCR suggestions can be incorrect. Verify them against the ID. The person/office and purpose are not on the ID, so the guard must enter those.</p>
+    <p class="muted">OCR may miss or misread text. Verify every suggestion against the ID. Enter the person/office and purpose manually.</p>
     <label>Visitor name<input id="visitorName" name="visitor_name" maxlength="120" required autocomplete="off" value="<?= h($form_data['visitor_name']) ?>"></label>
     <label>Mobile number <span class="muted">(optional)</span><input id="mobileNumber" name="mobile_number" maxlength="20" autocomplete="tel" value="<?= h($form_data['mobile_number']) ?>"></label>
     <label>Address <span class="muted">(optional; verify against the ID)</span><textarea id="visitorAddress" name="visitor_address" maxlength="500" rows="2" autocomplete="street-address"><?= h($form_data['visitor_address']) ?></textarea></label>

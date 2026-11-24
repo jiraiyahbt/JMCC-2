@@ -115,8 +115,11 @@ $assert(
     str_contains($visitorFormHtml, 'Possible duplicate visitor') &&
         str_contains($visitorFormHtml, '&lt;Test Visitor&gt;') &&
         str_contains($visitorFormHtml, '&lt;Test Address&gt;') &&
+        str_contains($visitorFormHtml, 'id="ocrTextDetails"') &&
+        str_contains($visitorFormHtml, 'id="recognizedIdText"') &&
+        preg_match('/<textarea id="recognizedIdText"[^>]*name=/s', $visitorFormHtml) !== 1 &&
         str_contains($visitorFormHtml, 'Please confirm the separate active visit.'),
-    'Visitor verification form safely renders errors, duplicate warnings, and submitted values'
+    'Visitor verification form safely renders errors, submitted values, and an unsubmitted OCR text preview'
 );
 
 $name = null;
