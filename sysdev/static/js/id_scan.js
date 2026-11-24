@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const chooseButton = document.getElementById("chooseImage");
   const stopButton = document.getElementById("stopCamera");
   const imageInput = document.getElementById("idImageInput");
+  const viewfinder = document.getElementById("idViewfinder");
   const nameInput = document.getElementById("visitorName");
   const mobileInput = document.getElementById("mobileNumber");
   const addressInput = document.getElementById("visitorAddress");
@@ -21,6 +22,23 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   let stream = null;
+  let isScanning = false;
+
+  function syncControls() {
+    if (isScanning) {
+      startButton.disabled = true;
+      captureButton.disabled = true;
+      chooseButton.disabled = true;
+      stopButton.disabled = true;
+      return;
+    }
+
+    const hasStream = Boolean(stream);
+    startButton.disabled = hasStream;
+    captureButton.disabled = !hasStream;
+    stopButton.disabled = !hasStream;
+    chooseButton.disabled = false;
+  }
 
   function stopCamera() {
     if (stream) {
@@ -28,10 +46,56 @@ document.addEventListener("DOMContentLoaded", () => {
       stream = null;
     }
     video.srcObject = null;
-    startButton.disabled = false;
-    captureButton.disabled = true;
-    stopButton.disabled = true;
+    syncControls();
     cameraMessage.textContent = "Camera is off. You can choose an ID image instead.";
+  }
+
+  function buildCroppedOcrCanvas() {
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
+    if (!videoWidth || !videoHeight) return null;
+
+    const videoRect = video.getBoundingClientRect();
+    if (!videoRect.width || !videoRect.height) return null;
+
+    const boxRect = viewfinder
+      ? viewfinder.getBoundingClientRect()
+      : {
+          left: videoRect.left + videoRect.width * 0.12,
+          top: videoRect.top + videoRect.height * 0.22,
+          width: videoRect.width * 0.76,
+          height: videoRect.height * 0.56,
+        };
+
+    const coverScale = Math.max(
+      videoRect.width / videoWidth,
+      videoRect.height / videoHeight
+    );
+    const renderedWidth = videoWidth * coverScale;
+    const renderedHeight = videoHeight * coverScale;
+    const offsetX = (renderedWidth - videoRect.width) / 2;
+    const offsetY = (renderedHeight - videoRect.height) / 2;
+
+    const sx = Math.max(0, Math.min(
+      videoWidth - 1,
+      Math.round((boxRect.left - videoRect.left + offsetX) / coverScale)
+    ));
+    const sy = Math.max(0, Math.min(
+      videoHeight - 1,
+      Math.round((boxRect.top - videoRect.top + offsetY) / coverScale)
+    ));
+    const sw = Math.max(1, Math.min(videoWidth - sx, Math.round(boxRect.width / coverScale)));
+    const sh = Math.max(1, Math.min(videoHeight - sy, Math.round(boxRect.height / coverScale)));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = sw;
+    canvas.height = sh;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.filter = "grayscale(1) contrast(1.45)";
+    context.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+    context.filter = "none";
+    return canvas;
   }
 
   function extractName(lines) {
@@ -84,16 +148,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function readImage(source) {
+    if (isScanning) return;
     if (!window.Tesseract?.recognize) {
       scanMessage.textContent = "Text recognition could not be loaded. Refresh the page or enter the details manually.";
       return;
     }
+    isScanning = true;
+    syncControls();
     scanMessage.textContent = "Reading printed ID text locally in this browser…";
     progress.hidden = false;
     progress.value = 0;
-    startButton.disabled = true;
-    captureButton.disabled = true;
-    chooseButton.disabled = true;
 
     try {
       const result = await window.Tesseract.recognize(source, "eng", {
@@ -127,10 +191,9 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Could not read the visitor ID text.", error);
       scanMessage.textContent = "Could not read this ID. Try better lighting or enter the details manually.";
     } finally {
+      isScanning = false;
       progress.hidden = true;
-      chooseButton.disabled = false;
-      startButton.disabled = Boolean(stream);
-      captureButton.disabled = !stream;
+      syncControls();
     }
   }
 
@@ -148,8 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       video.srcObject = stream;
       await video.play();
-      captureButton.disabled = false;
-      stopButton.disabled = false;
+      syncControls();
       cameraMessage.textContent = "Keep the ID flat and readable, then capture.";
     } catch (error) {
       console.error("Could not start the visitor ID camera.", error);
@@ -161,14 +223,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   captureButton.addEventListener("click", () => {
-    if (!video.videoWidth || !video.videoHeight) {
+    const canvas = buildCroppedOcrCanvas();
+    if (!canvas) {
       scanMessage.textContent = "Wait for the camera image, then try capturing again.";
       return;
     }
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d").drawImage(video, 0, 0);
     readImage(canvas);
   });
 

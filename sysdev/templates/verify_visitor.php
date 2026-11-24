@@ -24,7 +24,7 @@ $duplicates = isset($duplicates) && is_array($duplicates) ? $duplicates : [];
   <p class="lead">Capture the printed ID with the guard's device. Text recognition runs locally in this browser; the ID image is not uploaded or saved. Review the suggested name, mobile number, and address before recording the visit.</p>
   <?php if (!empty($errors)): ?><div class="flash flash-error"><ul><?php foreach ($errors as $error): ?><li><?= h($error) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
   <section class="card scanner-card">
-    <div class="scanner-preview"><video id="idVideo" autoplay muted playsinline></video><p id="cameraMessage">Open the camera, frame the ID, then capture it to read printed text.</p></div>
+    <div class="scanner-preview"><video id="idVideo" autoplay muted playsinline></video><div id="idViewfinder" class="id-viewfinder" aria-hidden="true"></div><p id="cameraMessage">Open the camera and align the printed ID inside the frame.</p></div>
     <div class="form-actions">
       <button class="button button-secondary" id="startCamera" type="button">Open camera</button>
       <button class="button button-secondary" id="captureId" type="button" disabled>Capture and read ID</button>

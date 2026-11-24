@@ -151,6 +151,7 @@ td small { margin-top: 4px; font-size: 11px; }
 .scanner-card { margin: 18px 0; padding: 18px; }
 .scanner-preview { position: relative; min-height: 230px; overflow: hidden; display: grid; place-items: center; border-radius: 8px; background: #122a3e; color: white; text-align: center; }
 .scanner-preview video { width: 100%; max-height: 360px; object-fit: cover; }
+.id-viewfinder { position: absolute; z-index: 1; top: 50%; left: 50%; width: min(80%, 520px); aspect-ratio: 1.586; transform: translate(-50%, -50%); border: 2px solid #fff; border-radius: 12px; box-shadow: 0 0 0 9999px rgb(0 0 0 / 28%); pointer-events: none; }
 .scanner-preview p { position: absolute; inset: auto 16px 10px; padding: 6px; border-radius: 4px; background: rgb(0 0 0 / 55%); color: white; font-size: 13px; }
 .scanner-preview video { display: block; min-height: 230px; }
 .scanner-card progress { width: 100%; margin-top: 12px; accent-color: var(--blue); }
