@@ -158,6 +158,7 @@ td small { margin-top: 4px; font-size: 11px; }
 .scanner-card progress { width: 100%; margin-top: 12px; accent-color: var(--blue); }
 .ocr-text-label { display: grid; gap: 8px; margin-top: 12px; color: var(--ink); font-size: 13px; font-weight: 700; }
 .ocr-text-label textarea { width: 100%; min-height: 160px; font-family: Consolas, "Courier New", monospace; font-size: 13px; font-weight: 400; }
+.ocr-record-text { max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.45 Consolas, "Courier New", monospace; }
 .lookup-form { margin-bottom: 18px; padding: 18px; }
 .input-action { display: flex; gap: 8px; }
 .input-action input { flex: 1; }

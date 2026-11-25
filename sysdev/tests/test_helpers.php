@@ -41,6 +41,7 @@ $assert(
     is_string($visitorController) &&
         is_string($mysqlSchema) &&
         str_contains($visitorController, 'visitor_id_text') &&
+        str_contains($visitorController, "'/record_visit.php'") &&
         str_contains($mysqlSchema, 'visitor_id_text TEXT NULL'),
     'Visitor check-in POST persists the full OCR text in the visit schema'
 );
@@ -55,6 +56,39 @@ restore_error_handler();
 $assert(
     str_contains($adminRecordsHtml, 'matching record(s); page 1 of 1'),
     'Admin records template renders safely with default data'
+);
+
+$filters = ['q' => '', 'visit_date' => '', 'status' => '', 'entrance' => ''];
+$entrances = ENTRANCES;
+$records = [[
+    'visitor_name' => null,
+    'visitor_id_text' => "FULL NAME: <Test Visitor>\nADDRESS: <Test Address>",
+    'mobile_number' => null,
+    'visitor_address' => null,
+    'destination' => 'Reception',
+    'purpose' => 'Meeting',
+    'entry_time' => '2026-11-23 09:00:00',
+    'exit_time' => null,
+    'status' => 'Inside campus',
+    'entrance_name' => ENTRANCES[0],
+    'entry_guard_name' => 'Test Guard',
+    'exit_entrance_name' => null,
+    'exit_guard_name' => null,
+    'pass_reference' => 'SG-TEST',
+]];
+set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
+ob_start();
+require __DIR__ . '/../templates/admin_records.php';
+$populatedAdminRecordsHtml = ob_get_clean();
+restore_error_handler();
+$assert(
+    str_contains($populatedAdminRecordsHtml, 'ID details recorded') &&
+        str_contains($populatedAdminRecordsHtml, 'View saved OCR text') &&
+        str_contains($populatedAdminRecordsHtml, '&lt;Test Visitor&gt;') &&
+        !str_contains($populatedAdminRecordsHtml, '<Test Visitor>'),
+    'Admin records safely render escaped OCR identity when the legacy name is empty'
 );
 
 ob_start();
@@ -86,8 +120,9 @@ $entrances = ENTRANCES;
 $stats = ['inside' => 1, 'visits' => 1, 'exited' => 0, 'long_stays' => 1];
 $visits = [[
     'visit_id' => 1,
-    'visitor_name' => 'Test Visitor',
+    'visitor_name' => null,
     'mobile_number' => null,
+    'visitor_id_text' => "FULL NAME: <Test Visitor>\nADDRESS: <Test Address>",
     'destination' => 'Reception',
     'purpose' => 'Meeting',
     'entry_time' => $today . ' 09:00:00',
@@ -105,23 +140,20 @@ require __DIR__ . '/../templates/guard_dashboard.php';
 $populatedDashboardHtml = ob_get_clean();
 restore_error_handler();
 $assert(
-    str_contains($populatedDashboardHtml, 'Test Visitor') &&
+    str_contains($populatedDashboardHtml, 'ID details recorded') &&
+        str_contains($populatedDashboardHtml, '&lt;Test Visitor&gt;') &&
         str_contains($populatedDashboardHtml, 'Long-stay alert'),
-    'Guard dashboard renders active visit and alert data'
+    'Guard dashboard safely renders raw OCR identity for a name-less visit'
 );
 
 $entrances = ENTRANCES;
 $entrance = ENTRANCES[0];
 $form_data = [
-    'visitor_name' => '<Test Visitor>',
-    'mobile_number' => '',
-    'visitor_address' => '<Test Address>',
     'visitor_id_text' => "FULL NAME: <Test Visitor>\nADDRESS: <Test Address>",
     'destination' => 'Reception',
     'purpose' => 'Meeting',
 ];
-$errors = ['Please confirm the separate active visit.'];
-$duplicates = [['visit_id' => 5]];
+$errors = ['Confirm that you reviewed the OCR text against the physical ID.'];
 set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
     throw new ErrorException($message, 0, $severity, $file, $line);
 });
@@ -131,15 +163,21 @@ $visitorFormHtml = ob_get_clean();
 restore_error_handler();
 $ocrTextareaAttributes = [];
 $assert(
-    str_contains($visitorFormHtml, 'Possible duplicate visitor') &&
-        str_contains($visitorFormHtml, '&lt;Test Visitor&gt;') &&
-        str_contains($visitorFormHtml, '&lt;Test Address&gt;') &&
     str_contains($visitorFormHtml, "FULL NAME: &lt;Test Visitor&gt;\nADDRESS: &lt;Test Address&gt;") &&
-        str_contains($visitorFormHtml, 'id="recognizedIdText"') &&
-        preg_match('/<textarea id="recognizedIdText"([^>]*)>/', $visitorFormHtml, $ocrTextareaAttributes) === 1 &&
+    str_contains($visitorFormHtml, 'id="recordVisitForm"') &&
+    str_contains($visitorFormHtml, 'id="ocrRawOutput"') &&
+    str_contains($visitorFormHtml, 'action="/record_visit.php?entrance=') &&
+    preg_match('/<textarea id="ocrRawOutput"([^>]*)>/', $visitorFormHtml, $ocrTextareaAttributes) === 1 &&
         !str_contains($ocrTextareaAttributes[1], 'readonly') &&
-    str_contains($ocrTextareaAttributes[1], 'name="visitor_id_text"') &&
-        str_contains($visitorFormHtml, 'Please confirm the separate active visit.'),
+    str_contains($ocrTextareaAttributes[1], 'required') &&
+    str_contains($ocrTextareaAttributes[1], 'name="id_details"') &&
+    str_contains($visitorFormHtml, 'name="person_visited"') &&
+    str_contains($visitorFormHtml, 'name="purpose_of_visit"') &&
+    !str_contains($visitorFormHtml, 'name="visitor_name"') &&
+    !str_contains($visitorFormHtml, 'name="mobile_number"') &&
+    !str_contains($visitorFormHtml, 'name="visitor_address"') &&
+    str_contains($visitorFormHtml, 'id="entranceGate" name="entrance"') &&
+        str_contains($visitorFormHtml, 'Confirm that you reviewed the OCR text against the physical ID.'),
     'Visitor verification form safely renders an editable, escaped OCR text field submitted with the visit'
 );
 
@@ -154,7 +192,7 @@ require __DIR__ . '/../templates/visitor_history.php';
 $emptyHistoryHtml = ob_get_clean();
 restore_error_handler();
 $assert(
-    str_contains($emptyHistoryHtml, 'Enter a visitor name to view previous visits.'),
+    str_contains($emptyHistoryHtml, 'Enter a visitor detail or OCR text fragment to search prior visits.'),
     'Visitor history renders an empty state when search data is missing'
 );
 
@@ -163,7 +201,7 @@ $mobile = '';
 $history = [[
     'entry_time' => '2026-11-23 09:00:00',
     'status' => 'Inside campus',
-    'visitor_address' => '12 Sample Street',
+    'visitor_id_text' => "FULL NAME: <Test Visitor>\nADDRESS: 12 Sample Street",
 ]];
 set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
     throw new ErrorException($message, 0, $severity, $file, $line);
@@ -175,8 +213,9 @@ restore_error_handler();
 $assert(
     str_contains($historyResultsHtml, 'Test Visitor') &&
         str_contains($historyResultsHtml, 'Not exited') &&
+        str_contains($historyResultsHtml, '&lt;Test Visitor&gt;') &&
         str_contains($historyResultsHtml, '12 Sample Street'),
-    'Visitor history safely renders results with optional fields missing'
+    'Visitor history safely renders OCR identity for a name-less visit'
 );
 
 $visit = null;
@@ -196,7 +235,8 @@ $assert(
 $visit = [
     'visit_id' => 42,
     'pass_reference' => 'SG-TEST42',
-    'visitor_name' => 'Test Visitor',
+    'visitor_name' => null,
+    'visitor_id_text' => "FULL NAME: <Test Visitor>\nADDRESS: 12 Sample Street",
     'destination' => 'Reception',
     'purpose' => 'Meeting',
     'entrance_name' => ENTRANCES[0],
@@ -212,9 +252,10 @@ $passHtml = ob_get_clean();
 restore_error_handler();
 $assert(
     str_contains($passHtml, 'SG-TEST42') &&
-        str_contains($passHtml, 'Test Visitor') &&
+        str_contains($passHtml, 'ID details recorded') &&
+        str_contains($passHtml, '&lt;Test Visitor&gt;') &&
         str_contains($passHtml, 'text: "SG-TEST42"'),
-    'Visitor pass renders visit details and QR reference'
+    'Visitor pass renders raw OCR identity and QR reference for a name-less visit'
 );
 
 fwrite(STDOUT, "{$passed} tests passed.\n");

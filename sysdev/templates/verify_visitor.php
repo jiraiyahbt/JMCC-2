@@ -8,15 +8,11 @@ $entrance = in_array($selectedEntrance, $entrances, true)
   : ($entrances[0] ?? ENTRANCES[0]);
 $existingFormData = isset($form_data) && is_array($form_data) ? $form_data : [];
 $form_data = array_merge([
-  'visitor_name' => '',
-  'mobile_number' => '',
-  'visitor_address' => '',
   'visitor_id_text' => '',
   'destination' => '',
   'purpose' => '',
 ], $existingFormData);
 $errors = isset($errors) && is_array($errors) ? $errors : [];
-$duplicates = isset($duplicates) && is_array($duplicates) ? $duplicates : [];
 ?>
 <section class="narrow-page wide-narrow">
   <a class="back-link" href="<?= h(url('/guard', ['entrance' => $entrance])) ?>">← Back to visitor log</a>
@@ -36,29 +32,19 @@ $duplicates = isset($duplicates) && is_array($duplicates) ? $duplicates : [];
     <progress id="ocrProgress" max="100" value="0" hidden></progress>
     <p class="muted" id="scanMessage" aria-live="polite"></p>
   </section>
-  <form class="card form-card stack-form" id="checkInForm" method="post" action="<?= h(url('/guard/verify', ['entrance' => $entrance])) ?>">
+  <form class="card form-card stack-form" id="recordVisitForm" method="POST" action="<?= h(url('/record_visit.php', ['entrance' => $entrance])) ?>">
     <?php csrf_field(); ?>
     <input type="hidden" name="action" value="check_in">
     <h2>Review and record visit</h2>
-    <p class="muted">Review or edit the complete OCR text before submitting. The OCR text is saved with the visit record and may contain sensitive ID details. Enter the structured visitor fields, person/office, and purpose as required.</p>
-    <label class="ocr-text-label" for="recognizedIdText">Complete text recognized from the ID (editable; saved with the visit)
-      <textarea id="recognizedIdText" name="visitor_id_text" rows="8" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Complete text recognized from the ID. Edit this text as needed."><?= h($form_data['visitor_id_text']) ?></textarea>
+    <p class="muted">Review or edit the complete OCR text before submitting. It is saved with the visit record and may contain sensitive ID details. Enter the person/office and purpose below.</p>
+    <label class="ocr-text-label" for="ocrRawOutput">Complete text recognized from the ID (editable; saved with the visit)
+      <textarea id="ocrRawOutput" name="id_details" rows="8" required autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Complete text recognized from the ID. Edit this text as needed."><?= h($form_data['visitor_id_text']) ?></textarea>
     </label>
-    <label>Visitor name<input id="visitorName" name="visitor_name" maxlength="120" required autocomplete="off" value="<?= h($form_data['visitor_name']) ?>"></label>
-    <label>Mobile number <span class="muted">(optional)</span><input id="mobileNumber" name="mobile_number" maxlength="20" autocomplete="tel" value="<?= h($form_data['mobile_number']) ?>"></label>
-    <label>Address <span class="muted">(optional; verify against the ID)</span><textarea id="visitorAddress" name="visitor_address" maxlength="500" rows="2" autocomplete="street-address"><?= h($form_data['visitor_address']) ?></textarea></label>
-    <label>Person or office visited<input name="destination" maxlength="100" required value="<?= h($form_data['destination']) ?>" autocomplete="off"></label>
-    <label>Purpose of visit<input name="purpose" maxlength="255" required value="<?= h($form_data['purpose']) ?>" autocomplete="off"></label>
-    <label>Entrance<select name="entrance" required><?php foreach (($entrances ?? [$entrance]) as $item): ?><option value="<?= h($item) ?>" <?= $item === $entrance ? 'selected' : '' ?>><?= h($item) ?></option><?php endforeach; ?></select></label>
-    <?php if (!empty($duplicates)): ?>
-      <div class="notice">
-        <strong>Possible duplicate visitor</strong>
-        <p>This visitor already has <?= count($duplicates) ?> active visit(s). Confirm that this is a separate visit before continuing.</p>
-      </div>
-      <label class="check-row"><input type="checkbox" name="duplicate_confirmed" value="yes" required><span>I confirmed that this is a separate visit.</span></label>
-    <?php endif; ?>
+    <label for="personVisited">Person or office visited<input id="personVisited" name="person_visited" maxlength="100" required value="<?= h($form_data['destination']) ?>" autocomplete="off"></label>
+    <label for="purposeOfVisit">Purpose of visit<input id="purposeOfVisit" name="purpose_of_visit" maxlength="255" required value="<?= h($form_data['purpose']) ?>" autocomplete="off"></label>
+    <label for="entranceGate">Entrance<select id="entranceGate" name="entrance" required><?php foreach (($entrances ?? [$entrance]) as $item): ?><option value="<?= h($item) ?>" <?= $item === $entrance ? 'selected' : '' ?>><?= h($item) ?></option><?php endforeach; ?></select></label>
     <div class="notice"><strong>School pass</strong><p>Continue the school's existing visitor-pass and flap-barrier process separately. SafeGate only records the visit and does not issue or scan the school's pass.</p></div>
-    <label class="check-row"><input type="checkbox" name="identity_confirmed" value="yes" required><span>I checked the suggested name and mobile against the physical ID.</span></label>
-    <button class="button button-primary" type="submit">Record check-in</button>
+    <label class="check-row"><input type="checkbox" name="id_details_confirmed" value="yes" required><span>I reviewed the complete OCR text against the physical ID.</span></label>
+    <button class="button button-primary" id="recordVisitBtn" type="submit">Record Visit</button>
   </form>
 </section>

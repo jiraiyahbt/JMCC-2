@@ -40,11 +40,16 @@ $visits = isset($visits) && is_array($visits) ? $visits : [];
   <?php if ($visits): ?>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Visitor / mobile</th><th>Person or office / purpose</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Action</th></tr></thead>
+        <thead><tr><th>Visitor ID details</th><th>Person or office / purpose</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>
           <?php foreach ($visits as $visit): ?>
             <tr>
-              <td><strong><?= h($visit['visitor_name']) ?></strong><small><?= h($visit['mobile_number'] ?: 'Mobile not recorded') ?></small><?php if (!empty($visit['visitor_address'])): ?><small><?= h($visit['visitor_address']) ?></small><?php endif; ?></td>
+              <td>
+                <strong><?= h(($visit['visitor_name'] ?? '') ?: 'ID details recorded') ?></strong>
+                <?php if (!empty($visit['visitor_id_text'])): ?><details><summary>View saved OCR text</summary><pre class="ocr-record-text"><?= h($visit['visitor_id_text']) ?></pre></details><?php endif; ?>
+                <?php if (!empty($visit['mobile_number'])): ?><small><?= h($visit['mobile_number']) ?></small><?php endif; ?>
+                <?php if (!empty($visit['visitor_address'])): ?><small><?= h($visit['visitor_address']) ?></small><?php endif; ?>
+              </td>
               <td><?= h($visit['destination']) ?><small><?= h($visit['purpose']) ?></small></td>
               <td><?= h($visit['entry_time']) ?><small><?= h($visit['entrance_name']) ?></small></td>
               <td><?= h($visit['exit_time'] ?: '—') ?><?php if ($visit['exit_entrance_name']): ?><small><?= h($visit['exit_entrance_name']) ?></small><?php endif; ?></td>

@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS staff_accounts (
 CREATE TABLE IF NOT EXISTS visitor_log_entries (
     visit_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     pass_reference VARCHAR(32) NULL,
-    visitor_name VARCHAR(120) NOT NULL,
+    visitor_name VARCHAR(120) NULL,
     mobile_number VARCHAR(20) NULL,
     visitor_address VARCHAR(500) NULL,
     visitor_id_text TEXT NULL,
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS visitor_log_entries (
         FOREIGN KEY (exit_guard_id) REFERENCES staff_accounts (staff_id)
         ON UPDATE RESTRICT ON DELETE RESTRICT,
     CONSTRAINT chk_visitor_log_fields CHECK (
-        CHAR_LENGTH(visitor_name) BETWEEN 1 AND 120
+        (visitor_name IS NULL OR CHAR_LENGTH(visitor_name) BETWEEN 1 AND 120)
         AND (mobile_number IS NULL OR CHAR_LENGTH(mobile_number) BETWEEN 7 AND 20)
         AND CHAR_LENGTH(destination) BETWEEN 1 AND 100
         AND CHAR_LENGTH(purpose) BETWEEN 1 AND 255

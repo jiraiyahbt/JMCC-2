@@ -1,6 +1,6 @@
 # SafeGate
 
-SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a camera or image file to read printed visitor-ID text in the browser. OCR suggests a name, mobile number, and labeled address for the guard to verify before recording a visit. QR codes are not scanned. The ID image is not uploaded or saved. The school continues using its existing visitor-pass and flap-barrier process.
+SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a camera or image file to read printed visitor-ID text in the browser. The complete OCR output is saved as the new visit's visitor identity; guards review it against the physical ID before check-in. New visits do not require separate name, mobile, or address fields and are not matched against older visits by name or mobile number. Existing structured fields remain available for historical records. QR codes are not scanned. The ID image is not uploaded or saved. The school continues using its existing visitor-pass and flap-barrier process.
 
 ## Requirements
 
@@ -87,7 +87,7 @@ instance/
 
 ## Main workflows
 
-- **Guards:** sign in, scan or manually enter visitor ID details, verify the name and mobile number, record check-in, and record checkout after the school's pass has been returned.
+- **Guards:** sign in, scan or manually enter visitor ID details, review the text against the physical ID, record check-in, and record checkout after the school's pass has been returned.
 - **Administrators:** review and export visitor records, invite staff, and manage staff accounts.
 
 ## Modules
@@ -97,7 +97,7 @@ instance/
 3. Visitor records: active visits, daily and completed visits, search/filtering, entrance and guard details, pagination, and CSV exports.
 4. Administration: staff management, account roles/status, reports, and audit-log review.
 5. Security and data: CSRF protection, password hashing, one-time invitation tokens, browser-only OCR, no ID-image upload, audit logging, and validation.
-6. Visitor history and duplicate detection: guard can search prior visits and is warned before recording a matching active visitor.
+6. Visitor history: guards can search prior visits by visitor name or OCR text. New OCR-only visits do not use name/mobile duplicate matching.
 7. Pass reference: each visit receives a unique text/QR reference. It does not replace or control the school's physical pass/barrier process.
 8. Long-stay monitoring: active visits older than `SAFEGATE_LONG_STAY_HOURS` are highlighted on the guard dashboard.
 
@@ -106,12 +106,13 @@ instance/
 - Camera scanning requires HTTPS or `localhost`.
 - Printed-text OCR runs in the browser using Tesseract.js; QR codes are not read by the visitor-ID scanner.
 - Camera capture is cropped to the visible ID viewfinder, then grayscaled and contrast-enhanced on a canvas before OCR. The camera preview and canvas are not mirrored. Uploaded images are OCR'd in full.
-- OCR output appears line-by-line in one editable text area inside the visit form. It is not parsed into separate fields; the full text is submitted with the form and stored in `visitor_log_entries.visitor_id_text`. The guard must fill the structured visitor fields and verify all information against the physical ID. OCR can miss or misread text.
+- OCR output appears line-by-line in one editable text area inside the visit form. It is not parsed into separate fields; the full text is submitted with the form and stored in `visitor_log_entries.visitor_id_text`. New visits store `NULL` in legacy name, mobile, and address columns. The guard must verify the text against the physical ID. OCR can miss or misread text.
+- The form posts to `/record_visit.php`, which is routed through the existing authenticated, CSRF-protected `index.php` check-in handler.
 - If local recognition assets are unavailable or scanning fails, guards can still enter details manually.
 - Tesseract.js, its worker, language data, and WebAssembly assets are served locally from `static/vendor/tesseract`. Keep the bundled third-party assets with the approved school deployment.
 - The captured ID image is never submitted to the server.
-- The complete OCR text can contain sensitive ID details. Store it only with school approval and protect it under the visitor-record retention policy; it is deleted when its visit record is purged.
-- The optional visitor address is saved with the visit record. Collect and retain it only if approved by the school.
+- The complete OCR text can contain sensitive ID details. It is visible in authorized guard and administrator records. It is not included in CSV exports. Store it only with school approval and protect it under the visitor-record retention policy; it is deleted when its visit record is purged.
+- Existing name, mobile, and address data is retained for historical records. New visits do not collect those fields separately.
 
 ## Privacy
 

@@ -4,6 +4,7 @@ $visit = array_merge([
   'visit_id' => '',
   'pass_reference' => '',
   'visitor_name' => '',
+  'visitor_id_text' => '',
   'destination' => '',
   'purpose' => '',
   'entrance_name' => '',
@@ -28,7 +29,8 @@ $qrValue = (string) (($visit['pass_reference'] ?? '') ?: ($visit['visit_id'] ?? 
       <?php endif; ?>
       <p><strong><?= h($visit['pass_reference'] ?: 'Pass reference pending') ?></strong></p>
       <div class="detail-grid">
-        <dt>Visitor</dt><dd><?= h($visit['visitor_name']) ?></dd>
+        <dt>Visitor</dt><dd><?= h(($visit['visitor_name'] ?? '') ?: 'ID details recorded') ?></dd>
+        <?php if (!empty($visit['visitor_id_text'])): ?><dt>ID details</dt><dd><details><summary>View saved OCR text</summary><pre class="ocr-record-text"><?= h($visit['visitor_id_text']) ?></pre></details></dd><?php endif; ?>
         <dt>Destination</dt><dd><?= h($visit['destination']) ?></dd>
         <dt>Purpose</dt><dd><?= h($visit['purpose']) ?></dd>
         <dt>Entrance</dt><dd><?= h($visit['entrance_name']) ?></dd>

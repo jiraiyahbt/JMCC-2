@@ -26,7 +26,7 @@ $total_records = $total_records ?? count($records);
 <section class="card filter-card">
   <div class="section-heading"><div><h2>Find visitor records</h2><p class="muted">Filters apply to current and past visits.</p></div><a href="/admin/records">Reset filters</a></div>
   <form method="get" action="/admin/records" class="filter-bar">
-    <label>Visitor name or mobile<input name="q" value="<?= h($filters['q']) ?>" placeholder="Search visitor records"></label>
+    <label>Visitor details or OCR text<input name="q" value="<?= h($filters['q']) ?>" placeholder="Search visitor records"></label>
     <label>Visit date<input type="date" name="visit_date" value="<?= h($filters['visit_date']) ?>"></label>
     <label>Status<select name="status"><option value="">All statuses</option><?php foreach (['Inside campus', 'Exited'] as $item): ?><option value="<?= h($item) ?>" <?= $filters['status'] === $item ? 'selected' : '' ?>><?= h($item) ?></option><?php endforeach; ?></select></label>
     <label>Entrance<select name="entrance"><option value="">All entrances</option><?php foreach ($entrances as $item): ?><option value="<?= h($item) ?>" <?= $filters['entrance'] === $item ? 'selected' : '' ?>><?= h($item) ?></option><?php endforeach; ?></select></label>
@@ -37,10 +37,15 @@ $total_records = $total_records ?? count($records);
   <div class="section-heading"><div><h2>Visitor log entries</h2><p class="muted"><?= h($total_records) ?> matching record(s); page <?= h($page) ?> of <?= h($total_pages) ?></p></div></div>
   <?php if ($records): ?>
     <div class="table-wrap"><table>
-      <thead><tr><th>Visitor / mobile</th><th>Person or office / purpose</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Entrance / guard</th></tr></thead>
+      <thead><tr><th>Visitor ID details</th><th>Person or office / purpose</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Entrance / guard</th></tr></thead>
       <tbody><?php foreach ($records as $record): ?>
         <tr>
-          <td><strong><?= h($record['visitor_name']) ?></strong><small><?= h($record['mobile_number'] ?: 'Mobile not recorded') ?></small><?php if (!empty($record['visitor_address'])): ?><small><?= h($record['visitor_address']) ?></small><?php endif; ?></td>
+          <td>
+            <strong><?= h(($record['visitor_name'] ?? '') ?: 'ID details recorded') ?></strong>
+            <?php if (!empty($record['visitor_id_text'])): ?><details><summary>View saved OCR text</summary><pre class="ocr-record-text"><?= h($record['visitor_id_text']) ?></pre></details><?php endif; ?>
+            <?php if (!empty($record['mobile_number'])): ?><small><?= h($record['mobile_number']) ?></small><?php endif; ?>
+            <?php if (!empty($record['visitor_address'])): ?><small><?= h($record['visitor_address']) ?></small><?php endif; ?>
+          </td>
           <td><?= h($record['destination']) ?><small><?= h($record['purpose']) ?></small></td>
           <td><?= h($record['entry_time'] ?: '—') ?></td>
           <td><?= h($record['exit_time'] ?: '—') ?></td>
