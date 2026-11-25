@@ -484,10 +484,16 @@ if (PHP_SAPI !== 'cli') {
             $entrance = ENTRANCES[0];
         }
         $submittedOcrText = $_POST['id_details'] ?? $_POST['visitor_id_text'] ?? '';
+        $submittedVisitorName = $_POST['visitor_name'] ?? '';
+        $submittedMobileNumber = $_POST['mobile_number'] ?? '';
+        $submittedVisitorAddress = $_POST['visitor_address'] ?? '';
         $submittedDestination = $_POST['person_visited'] ?? $_POST['destination'] ?? '';
         $submittedPurpose = $_POST['purpose_of_visit'] ?? $_POST['purpose'] ?? '';
         $formData = [
-            'visitor_id_text' => is_string($submittedOcrText) ? $submittedOcrText : '',
+            'visitor_id_text' => is_string($submittedOcrText) ? trim($submittedOcrText) : '',
+            'visitor_name' => is_string($submittedVisitorName) ? trim($submittedVisitorName) : '',
+            'mobile_number' => is_string($submittedMobileNumber) ? trim($submittedMobileNumber) : '',
+            'visitor_address' => is_string($submittedVisitorAddress) ? trim($submittedVisitorAddress) : '',
             'destination' => is_string($submittedDestination) ? trim($submittedDestination) : '',
             'purpose' => is_string($submittedPurpose) ? trim($submittedPurpose) : '',
         ];
@@ -499,10 +505,24 @@ if (PHP_SAPI !== 'cli') {
             }
             if (!is_string($submittedOcrText)) {
                 $errors[] = 'Recognized ID text must be plain text.';
-            } elseif (trim($formData['visitor_id_text']) === '') {
-                $errors[] = 'Enter or scan the ID details before recording the visit.';
             } elseif (strlen($formData['visitor_id_text']) > 65535) {
                 $errors[] = 'Recognized ID text must be 65 KB or fewer.';
+            }
+            if (!is_string($submittedVisitorName)) {
+                $errors[] = 'Visitor name must be plain text.';
+            } elseif (strlen($formData['visitor_name']) < 1 || strlen($formData['visitor_name']) > 120) {
+                $errors[] = 'Visitor name is required and must be 120 characters or fewer.';
+            }
+            if (!is_string($submittedMobileNumber)) {
+                $errors[] = 'Mobile number must be plain text.';
+            } elseif ($formData['mobile_number'] !== '' &&
+                !preg_match('/^09\d{9}$/', $formData['mobile_number'])) {
+                $errors[] = 'Mobile number must be an 11-digit Philippine number beginning with 09.';
+            }
+            if (!is_string($submittedVisitorAddress)) {
+                $errors[] = 'Visitor address must be plain text.';
+            } elseif (strlen($formData['visitor_address']) > 500) {
+                $errors[] = 'Visitor address must be 500 characters or fewer.';
             }
             if (strlen($formData['destination']) < 1 || strlen($formData['destination']) > 100) {
                 $errors[] = 'Person or office visited is required and must be 100 characters or fewer.';
@@ -514,7 +534,7 @@ if (PHP_SAPI !== 'cli') {
                 $errors[] = 'Choose a participating entrance.';
             }
             if (($_POST['id_details_confirmed'] ?? '') !== 'yes') {
-                $errors[] = 'Confirm that you reviewed the OCR text against the physical ID.';
+                $errors[] = 'Confirm that you reviewed the visitor details and any OCR text against the physical ID.';
             }
             if (!$errors) {
                 $statement = db()->prepare(
@@ -525,9 +545,9 @@ if (PHP_SAPI !== 'cli') {
                 );
                 $statement->execute([
                     create_pass_reference(),
-                    null,
-                    null,
-                    null,
+                    $formData['visitor_name'],
+                    $formData['mobile_number'] !== '' ? $formData['mobile_number'] : null,
+                    $formData['visitor_address'] !== '' ? $formData['visitor_address'] : null,
                     $formData['visitor_id_text'] !== '' ? $formData['visitor_id_text'] : null,
                     $formData['destination'],
                     $formData['purpose'],

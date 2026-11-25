@@ -31,19 +31,25 @@ $assert(
 );
 $assert(
     is_string($scannerScript) &&
-        !str_contains($scannerScript, 'extractName') &&
-        !str_contains($scannerScript, 'extractMobile') &&
-        !str_contains($scannerScript, 'extractAddress') &&
-        str_contains($scannerScript, 'ocrText.value = text'),
-    'Visitor ID OCR transfers unparsed full text to the visit form'
+        str_contains($scannerScript, 'function parseIdText(text)') &&
+        str_contains($scannerScript, 'visitorName.value = parsed.name') &&
+        str_contains($scannerScript, 'visitorMobile.value = parsed.mobile') &&
+        str_contains($scannerScript, 'visitorAddress.value = parsed.address') &&
+        str_contains($scannerScript, 'createWorker') &&
+        str_contains($scannerScript, 'getImageData') &&
+        str_contains($scannerScript, 'visibilitychange'),
+    'Visitor ID OCR parses fields locally and reuses a worker with image-processing fallbacks'
 );
 $assert(
     is_string($visitorController) &&
         is_string($mysqlSchema) &&
         str_contains($visitorController, 'visitor_id_text') &&
+        str_contains($visitorController, '$formData[\'visitor_name\']') &&
+        str_contains($visitorController, '$formData[\'mobile_number\']') &&
+        str_contains($visitorController, '$formData[\'visitor_address\']') &&
         str_contains($visitorController, "'/record_visit.php'") &&
         str_contains($mysqlSchema, 'visitor_id_text TEXT NULL'),
-    'Visitor check-in POST persists the full OCR text in the visit schema'
+    'Visitor check-in POST persists OCR text and reviewed visitor fields'
 );
 
 set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
@@ -150,10 +156,13 @@ $entrances = ENTRANCES;
 $entrance = ENTRANCES[0];
 $form_data = [
     'visitor_id_text' => "FULL NAME: <Test Visitor>\nADDRESS: <Test Address>",
+    'visitor_name' => 'Test Visitor',
+    'mobile_number' => '09171234567',
+    'visitor_address' => '12 Sample Street',
     'destination' => 'Reception',
     'purpose' => 'Meeting',
 ];
-$errors = ['Confirm that you reviewed the OCR text against the physical ID.'];
+$errors = ['Confirm that you reviewed the visitor details and any recognized OCR text against the physical ID.'];
 set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
     throw new ErrorException($message, 0, $severity, $file, $line);
 });
@@ -169,15 +178,19 @@ $assert(
     str_contains($visitorFormHtml, 'action="/record_visit.php?entrance=') &&
     preg_match('/<textarea id="ocrRawOutput"([^>]*)>/', $visitorFormHtml, $ocrTextareaAttributes) === 1 &&
         !str_contains($ocrTextareaAttributes[1], 'readonly') &&
-    str_contains($ocrTextareaAttributes[1], 'required') &&
+    !str_contains($ocrTextareaAttributes[1], 'required') &&
     str_contains($ocrTextareaAttributes[1], 'name="id_details"') &&
+    str_contains($visitorFormHtml, 'id="visitorName" name="visitor_name"') &&
+    str_contains($visitorFormHtml, 'id="visitorMobile" name="mobile_number"') &&
+    str_contains($visitorFormHtml, 'id="visitorAddress" name="visitor_address"') &&
+    str_contains($visitorFormHtml, 'id="cameraMessage" aria-live="polite"') &&
+    str_contains($visitorFormHtml, 'id="scanMessage" aria-live="polite"') &&
+    str_contains($visitorFormHtml, '<progress id="ocrProgress" max="100"') &&
+    str_contains($visitorFormHtml, 'id="idVideo" autoplay muted playsinline') &&
     str_contains($visitorFormHtml, 'name="person_visited"') &&
     str_contains($visitorFormHtml, 'name="purpose_of_visit"') &&
-    !str_contains($visitorFormHtml, 'name="visitor_name"') &&
-    !str_contains($visitorFormHtml, 'name="mobile_number"') &&
-    !str_contains($visitorFormHtml, 'name="visitor_address"') &&
     str_contains($visitorFormHtml, 'id="entranceGate" name="entrance"') &&
-        str_contains($visitorFormHtml, 'Confirm that you reviewed the OCR text against the physical ID.'),
+        str_contains($visitorFormHtml, 'Confirm that you reviewed the visitor details and any recognized OCR text against the physical ID.'),
     'Visitor verification form safely renders an editable, escaped OCR text field submitted with the visit'
 );
 
