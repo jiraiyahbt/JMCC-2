@@ -11,34 +11,32 @@ SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a camera 
 
 ## Create the database
 
-From this directory, run the schema using the MySQL client:
+For a fresh installation, start MySQL in XAMPP, open PowerShell in this directory, and import the current schema as the MySQL administrator:
 
 ```powershell
-cmd /c "mysql -u root -p < schema_mysql.sql"
+cmd /c "C:\xampp\mysql\bin\mysql.exe -u root -p < C:\xampp\htdocs\JMCC-2\sysdev\schema_mysql.sql"
 ```
 
-The schema creates the `safegate` database and its tables.
+The schema creates the `safegate` database, tables, and current columns. A fresh installation does not need the migration command below.
 
 Then create a separate application user. Choose a strong password and use the same value later in the `SAFEGATE_DB_PASSWORD` environment variable. The host in `CREATE USER` and `GRANT` must match:
 
 ```sql
-CREATE USER 'safegate_app'@'localhost' IDENTIFIED BY 'replace-with-a-strong-password';
-GRANT SELECT, INSERT, UPDATE, DELETE ON safegate.* TO 'safegate_app'@'localhost';
+CREATE USER 'safegate_app'@'127.0.0.1' IDENTIFIED BY 'replace-with-a-strong-password';
+GRANT SELECT, INSERT, UPDATE, DELETE ON safegate.* TO 'safegate_app'@'127.0.0.1';
 ```
 
-If the app later fails with "access denied" while connecting through `127.0.0.1`, create the same user and grant for `'safegate_app'@'127.0.0.1'` too.
-
-Keep database credentials out of source control.
+Run those statements in phpMyAdmin's SQL tab while signed in as the MySQL administrator. Keep database credentials out of source control.
 
 ## Apply or update the database
 
-After setting the database environment variables, the schema and all new tables can be applied with:
+For an existing SafeGate database, back it up and apply pending migrations with:
 
 ```powershell
 php index.php migrate
 ```
 
-The `migrate` command requires the database name and application database user to be reachable. Review each schema change before applying it to a production database.
+Run this from the `sysdev` directory after setting the database environment variables. Migrations change the schema and need a database account with `CREATE` and `ALTER` privileges. The normal `safegate_app` account above has only runtime read/write privileges, so do not use it for migrations unless you temporarily grant the required privileges and remove them afterward.
 
 ## Run locally on Windows PowerShell
 
