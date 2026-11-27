@@ -21,6 +21,7 @@ const ID_TEXT_LABELS = {
     "License Classification", "Date Issued", "Issue Date", "Civil Status",
   ],
 };
+const MINIMUM_ADDRESS_LENGTH = 20;
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -209,20 +210,57 @@ function parseIdText(text) {
   };
 }
 
-function fieldCandidateScore(field, value, text, confidence, region) {
+function fieldCandidateScore(field, value, text, confidence, region, words) {
+  const nameLabelPattern = /^(?:last|surname|family|given|first|middle|apelyido|pangalan)$/i;
+  const addressLabelPattern = /^(?:residential|permanent|present|current|home|residence|address|addresss|addres|adress|addr|tirahan)$/i;
+  const addressCuePattern = /^(?:barangay|brgy|bgy|purok|sitio|subd|subdivision|village|phase|block|blk|lot|street|st|road|rd|avenue|ave|highway|hwy|district|city|municipality|province|postal|zip)$/i;
   const labels = field === "name"
     ? ID_TEXT_LABELS.lastName.concat(ID_TEXT_LABELS.givenNames, ID_TEXT_LABELS.middleName)
     : field === "address"
       ? ID_TEXT_LABELS.address
       : [];
+  const ocrWords = Array.isArray(words) ? words : [];
+  const fieldLabelPattern = field === "name" ? nameLabelPattern : addressLabelPattern;
+  const matchedWord = ocrWords.find((word) => {
+    const text = String(word.text || "").replace(/[^a-z]/gi, "");
+    return fieldLabelPattern.test(text);
+  }) || (field === "address" && ocrWords.find((word) => {
+    const text = String(word.text || "").replace(/[^a-z]/gi, "");
+    return addressCuePattern.test(text);
+  }));
+  let localizedConfidence = confidence;
+  if (matchedWord && matchedWord.bbox) {
+    const y0 = Number(matchedWord.bbox.y0);
+    const y1 = Number(matchedWord.bbox.y1);
+    const lineHeight = y1 - y0;
+    if (Number.isFinite(y0) && Number.isFinite(y1) && lineHeight > 0) {
+      const top = y0 - lineHeight * 2;
+      const bottom = y1 + lineHeight * (field === "name" ? 7 : 8);
+      const confidences = ocrWords
+        .filter((word) => {
+          if (!word.bbox) return false;
+          const centerY = (Number(word.bbox.y0) + Number(word.bbox.y1)) / 2;
+          return Number.isFinite(centerY) && centerY >= top && centerY <= bottom &&
+            Number.isFinite(Number(word.confidence));
+        })
+        .map((word) => Number(word.confidence));
+      if (confidences.length) {
+        localizedConfidence = confidences.reduce((total, item) => total + item, 0) /
+          confidences.length;
+      }
+    }
+  }
   const hasFieldLabel = labels.length > 0 && new RegExp(
     "(?:^|\\s)(?:" + labelPattern(labels) + ")(?=\\s|[:|\\-]|$)",
     "i"
   ).test(text);
-  const confidenceScore = Number.isFinite(confidence) ? confidence : 0;
+  const confidenceScore = Number.isFinite(localizedConfidence) ? localizedConfidence : 0;
   const regionScore = region === field ? 100 : 0;
+  const completenessScore = field === "address" && value.trim().length >= MINIMUM_ADDRESS_LENGTH
+    ? 100
+    : 0;
   return confidenceScore + (hasFieldLabel ? 100 : 0) +
-    Math.min(value.length, 100) + regionScore;
+    Math.min(value.length, 100) + regionScore + completenessScore;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -380,6 +418,55 @@ document.addEventListener("DOMContentLoaded", () => {
     return canvas;
   }
 
+  function makeAdaptiveBinaryOcrCanvas(sourceCanvas) {
+    const canvas = document.createElement("canvas");
+    canvas.width = sourceCanvas.width;
+    canvas.height = sourceCanvas.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Adaptive thresholding is unavailable in this browser.");
+    context.drawImage(sourceCanvas, 0, 0);
+
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+    const width = canvas.width;
+    const height = canvas.height;
+    const stride = width + 1;
+    const integral = new Uint32Array(stride * (height + 1));
+    for (let y = 0; y < height; y += 1) {
+      let rowTotal = 0;
+      for (let x = 0; x < width; x += 1) {
+        rowTotal += pixels[(y * width + x) * 4];
+        integral[(y + 1) * stride + x + 1] =
+          integral[y * stride + x + 1] + rowTotal;
+      }
+    }
+
+    const radius = Math.max(12, Math.round(Math.min(width, height) * 0.02));
+    for (let y = 0; y < height; y += 1) {
+      const top = Math.max(0, y - radius);
+      const bottom = Math.min(height, y + radius + 1);
+      for (let x = 0; x < width; x += 1) {
+        const left = Math.max(0, x - radius);
+        const right = Math.min(width, x + radius + 1);
+        const area = (right - left) * (bottom - top);
+        const localTotal =
+          integral[bottom * stride + right] -
+          integral[top * stride + right] -
+          integral[bottom * stride + left] +
+          integral[top * stride + left];
+        const threshold = localTotal / area - 8;
+        const pixelIndex = (y * width + x) * 4;
+        const value = pixels[pixelIndex] > threshold ? 255 : 0;
+        pixels[pixelIndex] = value;
+        pixels[pixelIndex + 1] = value;
+        pixels[pixelIndex + 2] = value;
+      }
+    }
+
+    context.putImageData(imageData, 0, 0);
+    return canvas;
+  }
+
   function buildFieldCrop(sourceCanvas, words, labelPattern, cuePattern, linesBelow, fieldName) {
     if (!Array.isArray(words)) return null;
 
@@ -437,6 +524,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function buildCroppedOcrCanvas() {
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return null;
     const videoWidth = video.videoWidth;
     const videoHeight = video.videoHeight;
     if (!videoWidth || !videoHeight) return null;
@@ -524,6 +612,57 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function buildCenteredCardCrop(sourceCanvas) {
+    const cardAspect = 1.586;
+    const sourceAspect = sourceCanvas.width / sourceCanvas.height;
+    if (sourceAspect < 1.15 || sourceAspect > 2.5 || Math.abs(sourceAspect - cardAspect) < 0.08) {
+      return null;
+    }
+
+    let sx = 0;
+    let sy = 0;
+    let sw = sourceCanvas.width;
+    let sh = sourceCanvas.height;
+    if (sourceAspect > cardAspect) {
+      sw = sourceCanvas.height * cardAspect;
+      sx = (sourceCanvas.width - sw) / 2;
+    } else {
+      sh = sourceCanvas.width / cardAspect;
+      sy = (sourceCanvas.height - sh) / 2;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sw));
+    canvas.height = Math.max(1, Math.round(sh));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("ID cropping is unavailable in this browser.");
+    context.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+
+  function rotateCanvas(sourceCanvas, degrees) {
+    const radians = degrees * Math.PI / 180;
+    const width = Math.ceil(
+      Math.abs(sourceCanvas.width * Math.cos(radians)) +
+      Math.abs(sourceCanvas.height * Math.sin(radians))
+    );
+    const height = Math.ceil(
+      Math.abs(sourceCanvas.height * Math.cos(radians)) +
+      Math.abs(sourceCanvas.width * Math.sin(radians))
+    );
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, width);
+    canvas.height = Math.max(1, height);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("ID straightening is unavailable in this browser.");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.rotate(radians);
+    context.drawImage(sourceCanvas, -sourceCanvas.width / 2, -sourceCanvas.height / 2);
+    return canvas;
+  }
+
   function updateOcrProgress(event) {
     if (event.status === "recognizing text" && Number.isFinite(event.progress)) {
       progress.value = Math.max(0, Math.min(100, Math.round(5 + event.progress * 95)));
@@ -572,7 +711,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const missingFields = [];
     if (!parsed.name) missingFields.push("name");
-    if (!parsed.address) missingFields.push("address");
+    if (parsed.address.trim().length < MINIMUM_ADDRESS_LENGTH) {
+      missingFields.push(parsed.address ? "complete address" : "address");
+    }
     if (missingFields.length) {
       scanMessage.textContent = "Could not read the " + missingFields.join(" and ") +
         ". Retake the full ID scan with the card flat and in focus.";
@@ -599,100 +740,118 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const preparedImage = await prepareOcrImage(source);
-      const ocrAttempts = [
-        { image: preparedImage, mode: "11" },
-        { image: preparedImage, mode: "6" },
+      const cardCrop = buildCenteredCardCrop(preparedImage);
+      const cardImage = cardCrop || preparedImage;
+      const deskewedImages = [
+        rotateCanvas(cardImage, -2),
+        rotateCanvas(cardImage, 2),
       ];
-      progress.value = 5;
-      const ocrWorker = await getOcrWorker();
       const bestFields = {
         name: { value: "", score: -1 },
         mobile: { value: "", score: -1 },
         address: { value: "", score: -1 },
       };
-      const considerCandidate = (candidateText, confidence, region) => {
+      const considerCandidate = (data, region) => {
+        const candidateText = String(data.text || "").replace(/\r\n?/g, "\n").trim();
         const candidateFields = parseIdText(candidateText);
+        const words = Array.isArray(data.words) ? data.words : [];
         for (const field of ["name", "mobile", "address"]) {
           const value = candidateFields[field];
           if (!value) continue;
 
-          const score = fieldCandidateScore(field, value, candidateText, confidence, region);
+          const score = fieldCandidateScore(
+            field,
+            value,
+            candidateText,
+            Number(data.confidence),
+            region,
+            words
+          );
           if (score > bestFields[field].score) {
             bestFields[field] = { value: value, score: score };
           }
         }
+        return words;
       };
       const recognizedWords = [];
-      for (let index = 0; index < ocrAttempts.length; index += 1) {
-        const attempt = ocrAttempts[index];
-        if (index > 0) progress.value = 5;
+      progress.value = 5;
+      const ocrWorker = await getOcrWorker();
+      const baseAttempts = [
+        { image: preparedImage, mode: "11", region: "" },
+        { image: preparedImage, mode: "6", region: "" },
+      ];
+      if (cardCrop) {
+        baseAttempts.push(
+          { image: cardCrop, mode: "11", region: "card" },
+          { image: cardCrop, mode: "6", region: "card" }
+        );
+      }
+      deskewedImages.forEach((image) => {
+        baseAttempts.push({ image: image, mode: "6", region: "card" });
+      });
+
+      for (const attempt of baseAttempts) {
         await ocrWorker.setParameters({
           tessedit_pageseg_mode: attempt.mode,
           preserve_interword_spaces: "1",
         });
         const result = await ocrWorker.recognize(attempt.image);
-        if (Array.isArray(result.data.words)) {
-          for (const word of result.data.words) recognizedWords.push(word);
-        }
-        const candidateText = String(result.data.text || "").replace(/\r\n?/g, "\n").trim();
-        considerCandidate(candidateText, Number(result.data.confidence), "");
-
-        if (index === 1 && bestFields.address.value.length < 20) {
-          const binaryImage = makeBinaryOcrCanvas(preparedImage);
-          ocrAttempts.push(
-            { image: binaryImage, mode: "11" },
-            { image: binaryImage, mode: "6" }
-          );
-        }
-        if (index >= 1 && bestFields.address.value.length >= 20 && bestFields.name.value) break;
+        const words = considerCandidate(result.data, attempt.region);
+        if (attempt.image === cardImage) recognizedWords.push(...words);
       }
 
-      if (bestFields.address.value.length < 20) {
-        const addressCrop = buildAddressCrop(preparedImage, recognizedWords);
-        if (addressCrop) {
-          const cropAttempts = [
-            { image: addressCrop, mode: "6" },
-            { image: addressCrop, mode: "11" },
-          ];
-          for (let index = 0; index < cropAttempts.length; index += 1) {
-            progress.value = 5;
+      if (!bestFields.name.value || bestFields.address.value.length < MINIMUM_ADDRESS_LENGTH) {
+        const binaryImages = [
+          makeBinaryOcrCanvas(cardImage),
+          makeAdaptiveBinaryOcrCanvas(cardImage),
+        ];
+        for (const image of binaryImages) {
+          for (const mode of ["11", "6"]) {
             await ocrWorker.setParameters({
-              tessedit_pageseg_mode: cropAttempts[index].mode,
+              tessedit_pageseg_mode: mode,
               preserve_interword_spaces: "1",
             });
-            const result = await ocrWorker.recognize(cropAttempts[index].image);
-            const candidateText = String(result.data.text || "").replace(/\r\n?/g, "\n").trim();
-            considerCandidate(candidateText, Number(result.data.confidence), "address");
-            if (bestFields.address.value.length >= 20) break;
+            const result = await ocrWorker.recognize(image);
+            const words = considerCandidate(result.data, "card");
+            recognizedWords.push(...words);
+          }
+        }
+      }
+
+      if (bestFields.address.value.length < MINIMUM_ADDRESS_LENGTH) {
+        const addressCrop = buildAddressCrop(cardImage, recognizedWords);
+        if (addressCrop) {
+          for (const mode of ["6", "11"]) {
+            await ocrWorker.setParameters({
+              tessedit_pageseg_mode: mode,
+              preserve_interword_spaces: "1",
+            });
+            const result = await ocrWorker.recognize(addressCrop);
+            considerCandidate(result.data, "address");
           }
 
-          if (bestFields.address.value.length < 20) {
+          if (bestFields.address.value.length < MINIMUM_ADDRESS_LENGTH) {
             const binaryAddressCrop = makeBinaryOcrCanvas(addressCrop);
-            progress.value = 5;
             await ocrWorker.setParameters({
               tessedit_pageseg_mode: "6",
               preserve_interword_spaces: "1",
             });
             const result = await ocrWorker.recognize(binaryAddressCrop);
-            const candidateText = String(result.data.text || "").replace(/\r\n?/g, "\n").trim();
-            considerCandidate(candidateText, Number(result.data.confidence), "address");
+            considerCandidate(result.data, "address");
           }
         }
       }
 
       if (!bestFields.name.value) {
-        const nameCrop = buildNameCrop(preparedImage, recognizedWords);
+        const nameCrop = buildNameCrop(cardImage, recognizedWords);
         if (nameCrop) {
           for (const mode of ["6", "11"]) {
-            progress.value = 5;
             await ocrWorker.setParameters({
               tessedit_pageseg_mode: mode,
               preserve_interword_spaces: "1",
             });
             const result = await ocrWorker.recognize(nameCrop);
-            const candidateText = String(result.data.text || "").replace(/\r\n?/g, "\n").trim();
-            considerCandidate(candidateText, Number(result.data.confidence), "name");
-            if (bestFields.name.value) break;
+            considerCandidate(result.data, "name");
           }
         }
       }
@@ -715,9 +874,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   recordVisitForm.addEventListener("submit", (event) => {
-    if (!visitorAddress.value.trim()) {
+    if (visitorAddress.value.trim().length < MINIMUM_ADDRESS_LENGTH) {
       event.preventDefault();
-      scanMessage.textContent = "The address must be detected by scanning the ID. Retake the scan before recording the visit.";
+      scanMessage.textContent = "The complete address must be detected by scanning the ID. Retake the scan before recording the visit.";
       chooseButton.focus();
     }
   });
@@ -734,7 +893,11 @@ document.addEventListener("DOMContentLoaded", () => {
     cameraMessage.textContent = "Allow camera access, then frame the ID.";
     try {
       const requestedStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
         audio: false,
       });
       if (requestId !== cameraRequestId || document.hidden || pageIsLeaving) {
@@ -746,7 +909,15 @@ document.addEventListener("DOMContentLoaded", () => {
       video.srcObject = stream;
       await video.play();
       if (requestId === cameraRequestId && !document.hidden && !pageIsLeaving) {
-        cameraMessage.textContent = "Keep the ID flat and readable, then capture.";
+        const track = stream.getVideoTracks()[0];
+        const settings = track && typeof track.getSettings === "function"
+          ? track.getSettings()
+          : {};
+        const resolution = settings.width && settings.height
+          ? " (" + settings.width + "×" + settings.height + ")"
+          : "";
+        cameraMessage.textContent = "Camera ready" + resolution +
+          ". Keep the ID flat, focused, and glare-free, then capture.";
       } else {
         stopCamera("Camera stopped because the page is hidden.");
       }
@@ -766,13 +937,26 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  captureButton.addEventListener("click", () => {
-    const canvas = buildCroppedOcrCanvas();
-    if (!canvas) {
-      scanMessage.textContent = "Wait for the camera image, then try capturing again.";
-      return;
+  captureButton.addEventListener("click", async () => {
+    captureButton.disabled = true;
+    try {
+      if (typeof video.requestVideoFrameCallback === "function") {
+        await new Promise((resolve) => video.requestVideoFrameCallback(() => resolve()));
+      } else {
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve))
+        );
+      }
+
+      const canvas = buildCroppedOcrCanvas();
+      if (!canvas) {
+        scanMessage.textContent = "Wait for the camera image, then try capturing again.";
+        return;
+      }
+      await readImage(canvas);
+    } finally {
+      if (!pageIsLeaving) syncControls();
     }
-    readImage(canvas);
   });
 
   chooseButton.addEventListener("click", () => imageInput.click());

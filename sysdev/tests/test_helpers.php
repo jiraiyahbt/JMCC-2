@@ -38,8 +38,10 @@ $assert(
         str_contains($scannerScript, 'visitorMobile.value = parsed.mobile') &&
         str_contains($scannerScript, 'visitorAddress.value = parsed.address') &&
         str_contains($scannerScript, 'visitorAddress.value = ""') &&
+        str_contains($scannerScript, 'const MINIMUM_ADDRESS_LENGTH = 20;') &&
         str_contains($scannerScript, 'Could not read the ') &&
-        str_contains($scannerScript, 'The address must be detected by scanning the ID.') &&
+        str_contains($scannerScript, 'visitorAddress.value.trim().length < MINIMUM_ADDRESS_LENGTH') &&
+        str_contains($scannerScript, 'The complete address must be detected by scanning the ID.') &&
         str_contains($scannerScript, 'createWorker') &&
         str_contains($scannerScript, 'getImageData') &&
         str_contains($scannerScript, 'visibilitychange'),
@@ -59,12 +61,18 @@ $assert(
         str_contains($scannerScript, 'addressCuePattern') &&
         str_contains($scannerScript, 'address: extractAddress(lines)') &&
         str_contains($scannerScript, 'function buildAddressCrop(sourceCanvas, words)') &&
+        str_contains($scannerScript, 'function buildCenteredCardCrop(sourceCanvas)') &&
+        str_contains($scannerScript, 'function rotateCanvas(sourceCanvas, degrees)') &&
         str_contains($scannerScript, 'function makeBinaryOcrCanvas(sourceCanvas)') &&
         str_contains($scannerScript, 'const histogram = new Uint32Array(256)') &&
-        str_contains($scannerScript, 'const ocrAttempts = [') &&
+        str_contains($scannerScript, 'const baseAttempts = [') &&
         str_contains($scannerScript, 'tessedit_pageseg_mode: attempt.mode') &&
-        str_contains($scannerScript, 'function fieldCandidateScore(field, value, text, confidence, region)') &&
-        str_contains($scannerScript, 'considerCandidate(candidateText, Number(result.data.confidence), "address")'),
+        str_contains($scannerScript, 'function fieldCandidateScore(field, value, text, confidence, region, words)') &&
+        str_contains($scannerScript, 'value.trim().length >= MINIMUM_ADDRESS_LENGTH') &&
+        str_contains($scannerScript, 'bestFields.address.value.length < MINIMUM_ADDRESS_LENGTH') &&
+        str_contains($scannerScript, 'considerCandidate(result.data, "address")') &&
+        str_contains($scannerScript, 'width: { ideal: 1920 }') &&
+        !str_contains($scannerScript, 'bestFields.address.value.length >= 20 && bestFields.name.value) break'),
     'Visitor ID OCR uses address parsing and image-processing fallbacks'
 );
 $assert(

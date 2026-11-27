@@ -20,10 +20,10 @@ $errors = isset($errors) && is_array($errors) ? $errors : [];
   <a class="back-link" href="<?= h(url('/guard', ['entrance' => $entrance])) ?>">← Back to visitor log</a>
   <p class="eyebrow">Gate operations / check in</p>
   <h1>Scan visitor ID</h1>
-  <p class="lead">Capture the printed ID with the guard's device. OCR runs locally in this browser to fill the visitor name, mobile number, and address. The required address must be detected by scanning; retake the image if it is not detected. The image is not uploaded.</p>
+  <p class="lead">Use a clear, high-resolution image. Keep the full ID flat, focused, and glare-free inside the frame. OCR runs locally in this browser to fill the visitor name, mobile number, and address; the image is not uploaded. Retake the scan if the name or complete address is not detected.</p>
   <?php if (!empty($errors)): ?><div class="flash flash-error"><ul><?php foreach ($errors as $error): ?><li><?= h($error) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
   <section class="card scanner-card">
-    <div class="scanner-preview"><video id="idVideo" autoplay muted playsinline></video><div id="idViewfinder" class="id-viewfinder"><span class="id-viewfinder-hint">Align the full ID inside the frame</span></div><p id="cameraMessage" aria-live="polite">Start the camera, keep the full ID inside the frame, then capture.</p></div>
+    <div class="scanner-preview"><video id="idVideo" autoplay muted playsinline></video><div id="idViewfinder" class="id-viewfinder"><span class="id-viewfinder-hint">Fit the full ID; align edges and avoid glare</span></div><p id="cameraMessage" aria-live="polite">Start the camera, keep the ID flat and in focus, then capture.</p></div>
     <div class="form-actions">
       <button class="button button-secondary" id="startCamera" type="button">Open camera</button>
       <button class="button button-secondary" id="captureId" type="button" disabled>Capture and read ID</button>
@@ -38,7 +38,7 @@ $errors = isset($errors) && is_array($errors) ? $errors : [];
     <?php csrf_field(); ?>
     <input type="hidden" name="action" value="check_in">
     <h2>Review and record visit</h2>
-    <p class="muted">Verify all detected details against the physical ID. Retake the scan if the required address is not detected.</p>
+    <p class="muted">Verify all detected details against the physical ID. Retake the scan if the complete address is not detected.</p>
     <label for="visitorName">Visitor name<input id="visitorName" name="visitor_name" maxlength="120" required value="<?= h($form_data['visitor_name']) ?>" autocomplete="name"></label>
     <label for="visitorMobile">Mobile number <span class="muted">(optional)</span><input id="visitorMobile" name="mobile_number" type="tel" inputmode="numeric" maxlength="11" pattern="09[0-9]{9}" title="Enter an 11-digit Philippine mobile number beginning with 09." placeholder="09XXXXXXXXX" value="<?= h($form_data['mobile_number']) ?>" autocomplete="tel"></label>
     <label for="visitorAddress">Address <span class="muted">(required; filled by scan)</span><textarea id="visitorAddress" name="visitor_address" rows="3" maxlength="500" required readonly autocomplete="street-address"><?= h($form_data['visitor_address']) ?></textarea></label>
