@@ -37,25 +37,35 @@ $assert(
         str_contains($scannerScript, 'visitorName.value = parsed.name') &&
         str_contains($scannerScript, 'visitorMobile.value = parsed.mobile') &&
         str_contains($scannerScript, 'visitorAddress.value = parsed.address') &&
+        str_contains($scannerScript, 'visitorAddress.value = ""') &&
+        str_contains($scannerScript, 'Could not read the ') &&
+        str_contains($scannerScript, 'The address must be detected by scanning the ID.') &&
         str_contains($scannerScript, 'createWorker') &&
         str_contains($scannerScript, 'getImageData') &&
         str_contains($scannerScript, 'visibilitychange'),
-    'Visitor ID OCR parses fields locally and reuses a worker with image-processing fallbacks'
+    'Visitor ID OCR clears old fields and requires a scanned address'
 );
 $assert(
     is_string($scannerScript) &&
         str_contains($scannerScript, '"Residential Address"') &&
         str_contains($scannerScript, '"Addres"') &&
+        str_contains($scannerScript, '"Given Name"') &&
         str_contains($scannerScript, '(?:/|[1lI|])') &&
+        str_contains($scannerScript, 'function buildFieldCrop(sourceCanvas, words, labelPattern, cuePattern, linesBelow, fieldName)') &&
+        str_contains($scannerScript, 'function buildNameCrop(sourceCanvas, words)') &&
         str_contains($scannerScript, 'const addressLinePattern') &&
         str_contains($scannerScript, 'const repeatedAddressLabel = candidate.match(addressLinePattern)') &&
         str_contains($scannerScript, 'function extractUnlabeledAddress(lines)') &&
         str_contains($scannerScript, 'addressCuePattern') &&
+        str_contains($scannerScript, 'address: extractAddress(lines)') &&
+        str_contains($scannerScript, 'function buildAddressCrop(sourceCanvas, words)') &&
         str_contains($scannerScript, 'function makeBinaryOcrCanvas(sourceCanvas)') &&
         str_contains($scannerScript, 'const histogram = new Uint32Array(256)') &&
         str_contains($scannerScript, 'const ocrAttempts = [') &&
-        str_contains($scannerScript, 'candidateScore > bestScore'),
-    'Visitor ID OCR accepts common driver-license address label variations'
+        str_contains($scannerScript, 'tessedit_pageseg_mode: attempt.mode') &&
+        str_contains($scannerScript, 'function fieldCandidateScore(field, value, text, confidence, region)') &&
+        str_contains($scannerScript, 'considerCandidate(candidateText, Number(result.data.confidence), "address")'),
+    'Visitor ID OCR uses address parsing and image-processing fallbacks'
 );
 $assert(
     is_string($visitorController) &&
@@ -200,8 +210,9 @@ $assert(
     str_contains($visitorFormHtml, 'id="visitorAddress" name="visitor_address"') &&
     preg_match('/<textarea id="visitorAddress"([^>]*)>/', $visitorFormHtml, $addressTextareaAttributes) === 1 &&
         str_contains($addressTextareaAttributes[1], 'required') &&
+        str_contains($addressTextareaAttributes[1], 'readonly') &&
         str_contains($visitorController, "\$formData['visitor_address'] === ''") &&
-        str_contains($visitorController, 'Visitor address is required.') &&
+        str_contains($visitorController, 'Visitor address is required; scan the ID to detect it.') &&
     str_contains($visitorFormHtml, 'id="cameraMessage" aria-live="polite"') &&
     str_contains($visitorFormHtml, 'id="scanMessage" aria-live="polite"') &&
     str_contains($visitorFormHtml, '<progress id="ocrProgress" max="100"') &&

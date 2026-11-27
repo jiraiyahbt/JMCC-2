@@ -514,7 +514,7 @@ if (PHP_SAPI !== 'cli') {
             if (!is_string($submittedVisitorAddress)) {
                 $errors[] = 'Visitor address must be plain text.';
             } elseif ($formData['visitor_address'] === '') {
-                $errors[] = 'Visitor address is required.';
+                $errors[] = 'Visitor address is required; scan the ID to detect it.';
             } elseif (strlen($formData['visitor_address']) > 500) {
                 $errors[] = 'Visitor address must be 500 characters or fewer.';
             }

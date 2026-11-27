@@ -1,6 +1,6 @@
 # SafeGate
 
-SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a camera or image file to read printed visitor-ID text in the browser. OCR fills visitor name, Philippine mobile number, and address fields when detected. The guard verifies those fields against the physical ID before check-in; the full OCR text and ID image are not stored. New visits are not matched against older visits by name or mobile number. QR codes are not scanned. The school continues using its existing visitor-pass and flap-barrier process.
+SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a camera or image file to read printed visitor-ID text in the browser. OCR may fill the visitor name, Philippine mobile number, and address. The guard must verify all fields against the physical ID; the required address must be detected by scanning, and the scan must be retaken if it is missed. The full OCR text and ID image are not stored. New visits are not matched against older visits by name or mobile number. QR codes are not scanned. The school continues using its existing visitor-pass and flap-barrier process.
 
 ## Requirements
 
@@ -116,13 +116,13 @@ instance/
 
 ## Main workflows
 
-- **Guards:** sign in, scan or manually enter visitor ID details, review the name, mobile number, and required address against the physical ID (manually enter the address if OCR misses it), record check-in, and record checkout after the school's pass has been returned.
+- **Guards:** sign in, use OCR to assist with the name, mobile number, and address, verify the detected address, retake the scan if it is missed, record check-in, and record checkout after the school's pass has been returned.
 - **Administrators:** review and export visitor records, invite staff, and manage staff accounts.
 
 ## Modules
 
 1. Authentication and account management: individual staff sign-in, roles, invitations, activation, password changes, and active/inactive access.
-2. Guard operations: entrance selection, ID scanning or manual entry, OCR verification, check-in, check-out, and pass-return confirmation.
+2. Guard operations: entrance selection, ID scanning, OCR verification, check-in, check-out, and pass-return confirmation.
 3. Visitor records: active visits, daily and completed visits, search/filtering, entrance and guard details, pagination, and CSV exports.
 4. Administration: staff management, account roles/status, reports, and audit-log review.
 5. Security and data: CSRF protection, password hashing, one-time invitation tokens, browser-only OCR, no ID-image upload, audit logging, and validation.
@@ -135,13 +135,13 @@ instance/
 - Camera scanning requires HTTPS or `localhost`.
 - Printed-text OCR runs in the browser using Tesseract.js; QR codes are not read by the visitor-ID scanner.
 - Camera capture is cropped to the visible ID viewfinder, then grayscaled and contrast-enhanced on a canvas before OCR. The camera preview and canvas are not mirrored. Uploaded images are OCR'd in full.
-- Recognition tries sparse-text (PSM 11) and uniform-block (PSM 6) modes on the enhanced image, then repeats on an Otsu-thresholded image if the address is missing or incomplete. Address labels may be bilingual or misread; when a label is missed, common Philippine address terms are used as fallback cues.
-- OCR runs locally in the browser and only the suggested name, Philippine mobile number, and address are placed in the form. OCR cannot reliably identify every ID layout, so the guard must verify or correct each value. The full OCR text is not displayed or submitted to SafeGate, and neither the ID image nor OCR text is sent to a third-party service.
+- Recognition tries sparse-text (PSM 11) and uniform-block (PSM 6) modes on the enhanced image, then uses a thresholded image if the address is missing or incomplete. It retries a name crop when the name is missing and an address crop when the address is missing or incomplete. Name and address results are selected independently across OCR attempts; name labels can be followed by values on the same line or the next line.
+- OCR runs locally in the browser and may fill the name, Philippine mobile number, and address. The address is required, read-only, and must be detected by scanning; retake a clear image if it is missing. The guard must verify all fields against the physical ID. The full OCR text is not displayed or submitted to SafeGate, and neither the ID image nor OCR text is sent to a third-party OCR service.
 - The form posts to `/record_visit.php`, which is routed through the existing authenticated, CSRF-protected `index.php` check-in handler.
-- If local recognition assets are unavailable or scanning fails, guards can still enter details manually.
+- If local recognition assets are unavailable or scanning fails, the visitor address cannot be recorded until scanning succeeds.
 - Tesseract.js, its worker, language data, and WebAssembly assets are served locally from `static/vendor/tesseract`. Keep the bundled third-party assets with the approved school deployment.
 - The captured ID image is never submitted to the server.
-- Only the reviewed name, mobile number, and address are retained from the ID. The migration removes the former full-text OCR column and its saved values.
+- Only the reviewed name, mobile number, and scanned address are stored. The migration removes the former full-text OCR column and its saved values.
 
 ## Privacy
 

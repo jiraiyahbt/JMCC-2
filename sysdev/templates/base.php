@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/static/css/app.css">
   <?php if (!empty($scannerPage)): ?>
     <script defer src="/static/vendor/tesseract/tesseract.min.js"></script>
-    <script defer src="/static/js/id_scan.js"></script>
+    <script defer src="/static/js/id_scan.js?v=<?= h((string) filemtime(__DIR__ . '/../static/js/id_scan.js')) ?>"></script>
   <?php endif; ?>
 </head>
 <body>
