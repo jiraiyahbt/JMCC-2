@@ -4,11 +4,21 @@ const ID_TEXT_LABELS = {
   lastName: ["Last Name", "Surname", "Apelyido"],
   givenNames: ["Given Names", "First Name", "First Names", "Mga Pangalan"],
   middleName: ["Middle Name", "Gitnang Apelyido"],
-  address: ["Address", "Tirahan"],
+  address: [
+    "Residential Address", "Permanent Address", "Present Address", "Current Address",
+    "Home Address", "Residence Address", "Address", "Addresss", "Addres", "Adress",
+    "Add ress", "A ddress", "Addr", "Tirahan",
+  ],
   addressStops: [
+    "Last Name", "Surname", "Given Names", "First Name", "First Names",
+    "Middle Name", "Name",
     "Birth Date", "Date of Birth", "DOB", "Petsa ng Kapanganakan",
+    "Place of Birth", "Birth Place", "City of Birth",
     "Sex", "Gender", "Kasarian", "License Number", "License No",
     "Driver's License Number", "Driver's License No", "ID Number", "ID No",
+    "Nationality", "Blood Type", "Height", "Weight", "Restriction Code",
+    "Restrictions", "Conditions", "Expiration Date", "Expiry Date",
+    "License Classification", "Date Issued", "Issue Date", "Civil Status",
   ],
 };
 
@@ -88,26 +98,83 @@ function extractMobile(text) {
 
 function extractAddress(lines) {
   const alternatives = labelPattern(ID_TEXT_LABELS.address);
-  const inlinePattern = new RegExp("^\\s*(?:" + alternatives + ")\\s*[:\\-]\\s*(.*)$", "i");
-  const barePattern = new RegExp("^\\s*(?:" + alternatives + ")\\s*[:\\-]?\\s*$", "i");
+  const addressLinePattern = new RegExp(
+    "(?:^|\\s)(?:" + alternatives + ")(?:\\s*(?:/|[1lI|])\\s*(?:" + alternatives + "))?(.*)$",
+    "i"
+  );
+  const stopAlternatives = labelPattern(ID_TEXT_LABELS.addressStops);
   const stopPattern = new RegExp(
-    "^\\s*(?:" + labelPattern(ID_TEXT_LABELS.addressStops) + ")\\s*[:\\-]?.*$",
+    "^\\s*(?:" + stopAlternatives + ")\\s*[:\\-]?.*$",
+    "i"
+  );
+  const inlineStopPattern = new RegExp(
+    "\\s+(?:" + stopAlternatives + ")\\s*[:\\-]?.*$",
     "i"
   );
 
   for (let index = 0; index < lines.length; index += 1) {
-    const inlineMatch = lines[index].match(inlinePattern);
-    if (!inlineMatch && !barePattern.test(lines[index])) continue;
+    const labelMatch = lines[index].match(addressLinePattern);
+    if (!labelMatch) continue;
 
     const addressLines = [];
-    if (inlineMatch && inlineMatch[1].trim()) {
-      addressLines.push(inlineMatch[1].trim());
+    let inlineValue = labelMatch[1].replace(/^\s*[:\-.,/|]?\s*/, "").trim();
+    const inlineStopIndex = inlineValue.search(inlineStopPattern);
+    if (inlineStopIndex !== -1) {
+      inlineValue = inlineValue.slice(0, inlineStopIndex).trim();
+    }
+    if (inlineValue) {
+      addressLines.push(inlineValue);
     }
     for (let nextIndex = index + 1; nextIndex < lines.length && addressLines.length < 3; nextIndex += 1) {
-      const candidate = lines[nextIndex].trim();
+      let candidate = lines[nextIndex].trim();
       if (!candidate) continue;
       if (stopPattern.test(candidate)) break;
+      const repeatedAddressLabel = candidate.match(addressLinePattern);
+      if (repeatedAddressLabel) {
+        candidate = repeatedAddressLabel[1].replace(/^\s*[:\-.,/|]?\s*/, "").trim();
+        if (!candidate) continue;
+      }
+      const candidateStopIndex = candidate.search(inlineStopPattern);
+      if (candidateStopIndex !== -1) {
+        candidate = candidate.slice(0, candidateStopIndex).trim();
+        if (candidate) addressLines.push(candidate);
+        break;
+      }
       addressLines.push(candidate);
+    }
+    const address = toTitleCase(addressLines.join(" "));
+    if (address) return address;
+  }
+  return extractUnlabeledAddress(lines);
+}
+
+function extractUnlabeledAddress(lines) {
+  const addressCuePattern = /\b(?:brgy|barangay|bgy|purok|sitio|subd|subdivision|village|phase|block|blk|lot|street|st|road|rd|avenue|ave|highway|hwy|district|city|municipality|province|postal|zip)\b/i;
+  const stopPattern = new RegExp(
+    "^\\s*(?:" + labelPattern(
+      ID_TEXT_LABELS.lastName.concat(
+        ID_TEXT_LABELS.givenNames,
+        ID_TEXT_LABELS.middleName,
+        ID_TEXT_LABELS.address,
+        ID_TEXT_LABELS.addressStops
+      )
+    ) + ")\\s*[:\\-]?.*$",
+    "i"
+  );
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const firstLine = lines[index].trim();
+    if (!addressCuePattern.test(firstLine) || stopPattern.test(firstLine)) continue;
+
+    const addressLines = [firstLine];
+    for (let nextIndex = index + 1; nextIndex < lines.length && addressLines.length < 3; nextIndex += 1) {
+      const candidate = lines[nextIndex].trim();
+      if (!candidate || stopPattern.test(candidate)) break;
+      if (addressCuePattern.test(candidate)) {
+        addressLines.push(candidate);
+      } else {
+        break;
+      }
     }
     return toTitleCase(addressLines.join(" "));
   }
@@ -133,6 +200,14 @@ function parseIdText(text) {
   };
 }
 
+function parsedFieldScore(text) {
+  const parsed = parseIdText(text);
+  return Number(Boolean(parsed.address)) * 100 +
+    Math.min(parsed.address.length, 100) +
+    Number(Boolean(parsed.name)) * 10 +
+    Number(Boolean(parsed.mobile)) * 5;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const video = document.getElementById("idVideo");
   const viewfinder = document.getElementById("idViewfinder");
@@ -141,7 +216,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const chooseButton = document.getElementById("chooseImage");
   const stopButton = document.getElementById("stopCamera");
   const imageInput = document.getElementById("idImageInput");
-  const ocrText = document.getElementById("ocrRawOutput");
   const visitorName = document.getElementById("visitorName");
   const visitorMobile = document.getElementById("visitorMobile");
   const visitorAddress = document.getElementById("visitorAddress");
@@ -158,7 +232,6 @@ document.addEventListener("DOMContentLoaded", () => {
     chooseImage: chooseButton,
     stopCamera: stopButton,
     idImageInput: imageInput,
-    ocrRawOutput: ocrText,
     visitorName: visitorName,
     visitorMobile: visitorMobile,
     visitorAddress: visitorAddress,
@@ -183,7 +256,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let workerTerminated = false;
 
   function syncControls() {
-    ocrText.disabled = isScanning;
     startButton.disabled = isScanning || cameraPending || Boolean(stream);
     captureButton.disabled = isScanning || !stream;
     chooseButton.disabled = isScanning || cameraPending;
@@ -192,7 +264,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function clearDetectedDetails() {
-    ocrText.value = "";
     visitorName.value = "";
     visitorMobile.value = "";
     visitorAddress.value = "";
@@ -238,6 +309,56 @@ document.addEventListener("DOMContentLoaded", () => {
       pixels[index + 2] = enhanced;
     }
     context.putImageData(imageData, 0, 0);
+  }
+
+  function makeBinaryOcrCanvas(sourceCanvas) {
+    const canvas = document.createElement("canvas");
+    canvas.width = sourceCanvas.width;
+    canvas.height = sourceCanvas.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Image thresholding is unavailable in this browser.");
+    context.drawImage(sourceCanvas, 0, 0);
+
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+    const histogram = new Uint32Array(256);
+    let totalIntensity = 0;
+    const pixelCount = pixels.length / 4;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const intensity = pixels[index];
+      histogram[intensity] += 1;
+      totalIntensity += intensity;
+    }
+
+    let backgroundCount = 0;
+    let backgroundIntensity = 0;
+    let maxVariance = -1;
+    let threshold = 128;
+    for (let level = 0; level < histogram.length; level += 1) {
+      backgroundCount += histogram[level];
+      if (!backgroundCount) continue;
+
+      const foregroundCount = pixelCount - backgroundCount;
+      if (!foregroundCount) break;
+      backgroundIntensity += level * histogram[level];
+      const backgroundMean = backgroundIntensity / backgroundCount;
+      const foregroundMean = (totalIntensity - backgroundIntensity) / foregroundCount;
+      const variance = backgroundCount * foregroundCount *
+        (backgroundMean - foregroundMean) * (backgroundMean - foregroundMean);
+      if (variance > maxVariance) {
+        maxVariance = variance;
+        threshold = level;
+      }
+    }
+
+    for (let index = 0; index < pixels.length; index += 4) {
+      const value = pixels[index] > threshold ? 255 : 0;
+      pixels[index] = value;
+      pixels[index + 1] = value;
+      pixels[index + 2] = value;
+    }
+    context.putImageData(imageData, 0, 0);
+    return canvas;
   }
 
   function buildCroppedOcrCanvas() {
@@ -313,7 +434,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const height = loaded.image.height || loaded.image.naturalHeight;
       if (!width || !height) throw new Error("The selected image has no readable dimensions.");
 
-      const scale = Math.min(3, 2400 / Math.max(width, height));
+      const scale = Math.min(4, 2600 / Math.max(width, height));
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, Math.round(width * scale));
       canvas.height = Math.max(1, Math.round(height * scale));
@@ -376,8 +497,10 @@ document.addEventListener("DOMContentLoaded", () => {
     visitorAddress.value = parsed.address;
 
     const filledCount = [parsed.name, parsed.mobile, parsed.address].filter(Boolean).length;
-    if (filledCount === 0) {
-      scanMessage.textContent = "No name, mobile number, or address was detected. Please enter details manually and verify them against the ID.";
+    if (!parsed.address) {
+      scanMessage.textContent = filledCount > 0
+        ? "Filled " + filledCount + " of 3 fields. Address wasn't detected; enter it manually before recording."
+        : "No name, mobile number, or address was detected. Enter the details manually before recording.";
       return;
     }
     scanMessage.textContent = "Filled " + filledCount + " of 3 fields. Please verify against the ID before saving.";
@@ -399,11 +522,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const preparedImage = await prepareOcrImage(source);
+      const ocrAttempts = [
+        { image: preparedImage, mode: "11" },
+        { image: preparedImage, mode: "6" },
+      ];
       progress.value = 5;
       const ocrWorker = await getOcrWorker();
-      const result = await ocrWorker.recognize(preparedImage);
-      const text = String(result.data.text || "").replace(/\r\n?/g, "\n").trim();
-      ocrText.value = text;
+      let text = "";
+      let bestScore = -1;
+      for (let index = 0; index < ocrAttempts.length; index += 1) {
+        const attempt = ocrAttempts[index];
+        if (index > 0) progress.value = 5;
+        await ocrWorker.setParameters({
+          tessedit_pageseg_mode: attempt.mode,
+          preserve_interword_spaces: "1",
+        });
+        const result = await ocrWorker.recognize(attempt.image);
+        const candidateText = String(result.data.text || "").replace(/\r\n?/g, "\n").trim();
+        const candidateScore = parsedFieldScore(candidateText);
+        if (candidateScore > bestScore) {
+          text = candidateText;
+          bestScore = candidateScore;
+        }
+
+        const bestAddress = parseIdText(text).address;
+        if (index === 1 && bestAddress.length < 20) {
+          const binaryImage = makeBinaryOcrCanvas(preparedImage);
+          ocrAttempts.push(
+            { image: binaryImage, mode: "11" },
+            { image: binaryImage, mode: "6" }
+          );
+        }
+        if (index >= 1 && bestAddress.length >= 20) break;
+      }
+
       applyParsedDetails(text);
     } catch (error) {
       if (!pageIsLeaving) {

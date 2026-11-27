@@ -9,13 +9,10 @@
     <script defer src="/static/vendor/tesseract/tesseract.min.js"></script>
     <script defer src="/static/js/id_scan.js"></script>
   <?php endif; ?>
-  <?php if (!empty($passPage)): ?>
-    <script defer src="/static/vendor/qrcode.min.js"></script>
-  <?php endif; ?>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/"><span class="brand-mark">S</span><span>SafeGate</span></a>
+    <a class="brand" href="/"><img class="brand-mark" src="/static/img/jmcc-logo.png" alt=""><span>SafeGate</span></a>
     <nav class="topnav" aria-label="Main navigation">
       <?php if (isset($user) && $user): ?>
         <?php if ($user['role'] === 'Administrator'): ?>

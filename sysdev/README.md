@@ -1,6 +1,6 @@
 # SafeGate
 
-SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a camera or image file to read printed visitor-ID text in the browser. OCR fills visitor name, Philippine mobile number, and address fields when detected, while preserving the complete editable OCR text for review. The guard verifies all details against the physical ID before check-in. New visits are not matched against older visits by name or mobile number. QR codes are not scanned. The ID image is not uploaded or saved. The school continues using its existing visitor-pass and flap-barrier process.
+SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a camera or image file to read printed visitor-ID text in the browser. OCR fills visitor name, Philippine mobile number, and address fields when detected. The guard verifies those fields against the physical ID before check-in; the full OCR text and ID image are not stored. New visits are not matched against older visits by name or mobile number. QR codes are not scanned. The school continues using its existing visitor-pass and flap-barrier process.
 
 ## Requirements
 
@@ -8,6 +8,37 @@ SafeGate is a PHP and MySQL guard-operated visitor log. Guards can use a camera 
 - MySQL 8.0.16 or newer
 - Apache with `mod_rewrite`, or PHP's development server for local testing
 - Camera access requires HTTPS or localhost.
+
+## Optional Python ID OCR utility
+
+`tools/philippine_id_ocr.py` is a standalone local OCR utility for extracting a name, mobile number, and address from Philippine IDs. It is not connected to SafeGate's browser-based scanner and does not change the website's check-in workflow.
+
+Install the Python dependencies from the `sysdev` directory:
+
+```powershell
+python -m pip install -r tools\requirements.txt
+```
+
+Install the Tesseract OCR executable separately. On Windows, either pass its path:
+
+```powershell
+python tools\philippine_id_ocr.py "C:\path\to\visitor-id.jpg" --tesseract-cmd "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+or set `TESSERACT_CMD` in the environment:
+
+```powershell
+$env:TESSERACT_CMD = "C:\Program Files\Tesseract-OCR\tesseract.exe"
+python tools\philippine_id_ocr.py "C:\path\to\visitor-id.jpg"
+```
+
+The default language is English; `--lang eng+tgl` requires the Tagalog trained data to be installed. Run the parser tests with:
+
+```powershell
+python -m unittest discover -s tools
+```
+
+The utility returns only the extracted name, mobile number, and address; it does not save or print the full OCR text. ID images and extracted details are sensitive personal information; handle them only under the school's approved privacy and retention rules.
 
 ## Create the database
 
@@ -85,7 +116,7 @@ instance/
 
 ## Main workflows
 
-- **Guards:** sign in, scan or manually enter visitor ID details, review the name, mobile number, address, and complete OCR text against the physical ID, record check-in, and record checkout after the school's pass has been returned.
+- **Guards:** sign in, scan or manually enter visitor ID details, review the name, mobile number, and required address against the physical ID (manually enter the address if OCR misses it), record check-in, and record checkout after the school's pass has been returned.
 - **Administrators:** review and export visitor records, invite staff, and manage staff accounts.
 
 ## Modules
@@ -95,7 +126,7 @@ instance/
 3. Visitor records: active visits, daily and completed visits, search/filtering, entrance and guard details, pagination, and CSV exports.
 4. Administration: staff management, account roles/status, reports, and audit-log review.
 5. Security and data: CSRF protection, password hashing, one-time invitation tokens, browser-only OCR, no ID-image upload, audit logging, and validation.
-6. Visitor history: guards can search prior visits by visitor name or OCR text. New visits do not use name/mobile duplicate matching.
+6. Visitor history: guards can search prior visits by visitor name, mobile number, or address. New visits do not use name/mobile duplicate matching.
 7. Pass reference: each visit receives a unique text/QR reference. It does not replace or control the school's physical pass/barrier process.
 8. Long-stay monitoring: active visits older than `SAFEGATE_LONG_STAY_HOURS` are highlighted on the guard dashboard.
 
@@ -104,13 +135,13 @@ instance/
 - Camera scanning requires HTTPS or `localhost`.
 - Printed-text OCR runs in the browser using Tesseract.js; QR codes are not read by the visitor-ID scanner.
 - Camera capture is cropped to the visible ID viewfinder, then grayscaled and contrast-enhanced on a canvas before OCR. The camera preview and canvas are not mirrored. Uploaded images are OCR'd in full.
-- OCR output appears line-by-line in one editable text area inside the visit form. The browser also suggests the name, Philippine mobile number, and address in separate editable fields; OCR cannot reliably identify every ID layout, so the guard must verify or correct each value. The complete OCR text and reviewed fields are submitted to this SafeGate app and stored in `visitor_log_entries`. OCR runs locally in the browser; it does not send the ID image or text to a third-party OCR service.
+- Recognition tries sparse-text (PSM 11) and uniform-block (PSM 6) modes on the enhanced image, then repeats on an Otsu-thresholded image if the address is missing or incomplete. Address labels may be bilingual or misread; when a label is missed, common Philippine address terms are used as fallback cues.
+- OCR runs locally in the browser and only the suggested name, Philippine mobile number, and address are placed in the form. OCR cannot reliably identify every ID layout, so the guard must verify or correct each value. The full OCR text is not displayed or submitted to SafeGate, and neither the ID image nor OCR text is sent to a third-party service.
 - The form posts to `/record_visit.php`, which is routed through the existing authenticated, CSRF-protected `index.php` check-in handler.
 - If local recognition assets are unavailable or scanning fails, guards can still enter details manually.
 - Tesseract.js, its worker, language data, and WebAssembly assets are served locally from `static/vendor/tesseract`. Keep the bundled third-party assets with the approved school deployment.
 - The captured ID image is never submitted to the server.
-- The complete OCR text can contain sensitive ID details. It is visible in authorized guard and administrator records. It is not included in CSV exports. Store it only with school approval and protect it under the visitor-record retention policy; it is deleted when its visit record is purged.
-- Existing name, mobile, and address data is retained for historical records. New visits store the reviewed name, mobile number, and address alongside the complete OCR text.
+- Only the reviewed name, mobile number, and address are retained from the ID. The migration removes the former full-text OCR column and its saved values.
 
 ## Privacy
 

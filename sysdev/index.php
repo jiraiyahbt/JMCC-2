@@ -64,7 +64,7 @@ function record_rows(array $filters, int $limit = 500, int $offset = 0): array
     $clauses = [];
     $values = [];
     if ($filters['q'] !== '') {
-        $clauses[] = '(vl.visitor_name LIKE ? OR vl.mobile_number LIKE ? OR vl.visitor_id_text LIKE ?)';
+        $clauses[] = '(vl.visitor_name LIKE ? OR vl.mobile_number LIKE ? OR vl.visitor_address LIKE ?)';
         $term = '%' . $filters['q'] . '%';
         $values[] = $term;
         $values[] = $term;
@@ -88,7 +88,7 @@ function record_rows(array $filters, int $limit = 500, int $offset = 0): array
         ? 'LIMIT ' . max(1, min($limit, 10000)) . ' OFFSET ' . max(0, $offset)
         : '';
     $statement = db()->prepare(
-        "SELECT vl.visit_id, vl.visitor_name, vl.mobile_number, vl.visitor_address, vl.visitor_id_text,
+        "SELECT vl.visit_id, vl.visitor_name, vl.mobile_number, vl.visitor_address,
                 vl.destination,
                 vl.purpose, vl.status, vl.entrance_name, vl.exit_entrance_name,
                 vl.entry_time, vl.exit_time, vl.pass_reference,
@@ -110,7 +110,7 @@ function record_row_count(array $filters): int
     $clauses = [];
     $values = [];
     if ($filters['q'] !== '') {
-        $clauses[] = '(visitor_name LIKE ? OR mobile_number LIKE ? OR visitor_id_text LIKE ?)';
+        $clauses[] = '(visitor_name LIKE ? OR mobile_number LIKE ? OR visitor_address LIKE ?)';
         $term = '%' . $filters['q'] . '%';
         $values[] = $term;
         $values[] = $term;
@@ -139,19 +139,19 @@ function visitor_history(string $searchTerm, ?string $mobile = null): array
     $term = '%' . $searchTerm . '%';
     if ($mobile) {
         $statement = db()->prepare(
-            'SELECT visit_id, visitor_name, mobile_number, visitor_address, visitor_id_text, destination, purpose,
+            'SELECT visit_id, visitor_name, mobile_number, visitor_address, destination, purpose,
                     entrance_name, exit_entrance_name, entry_time, exit_time, status, pass_reference
              FROM visitor_log_entries
-             WHERE visitor_name LIKE ? OR mobile_number = ? OR visitor_id_text LIKE ?
+             WHERE visitor_name LIKE ? OR mobile_number = ? OR visitor_address LIKE ?
              ORDER BY entry_time DESC LIMIT 100'
         );
         $statement->execute([$term, $mobile, $term]);
     } else {
         $statement = db()->prepare(
-            'SELECT visit_id, visitor_name, mobile_number, visitor_address, visitor_id_text, destination, purpose,
+            'SELECT visit_id, visitor_name, mobile_number, visitor_address, destination, purpose,
                     entrance_name, exit_entrance_name, entry_time, exit_time, status, pass_reference
              FROM visitor_log_entries
-             WHERE visitor_name LIKE ? OR visitor_id_text LIKE ?
+             WHERE visitor_name LIKE ? OR visitor_address LIKE ?
              ORDER BY entry_time DESC LIMIT 100'
         );
         $statement->execute([$term, $term]);
@@ -222,10 +222,9 @@ function run_migrations_command(): never
            AND TABLE_NAME = 'visitor_log_entries'
            AND COLUMN_NAME = 'visitor_id_text'"
     )->fetchColumn();
-    if ((int) $ocrTextColumn === 0) {
+    if ((int) $ocrTextColumn > 0) {
         db()->exec(
-            'ALTER TABLE visitor_log_entries
-             ADD COLUMN visitor_id_text TEXT NULL AFTER visitor_address'
+            'ALTER TABLE visitor_log_entries DROP COLUMN visitor_id_text'
         );
     }
     fwrite(STDOUT, "SafeGate database migrations applied.\n");
@@ -444,7 +443,7 @@ if (PHP_SAPI !== 'cli') {
         $statement->execute([$today]);
         $visitsToday = (int) $statement->fetchColumn();
         $statement = db()->prepare(
-            "SELECT visit_id, visitor_name, mobile_number, visitor_address, visitor_id_text, destination, purpose,
+            "SELECT visit_id, visitor_name, mobile_number, visitor_address, destination, purpose,
                     entrance_name, exit_entrance_name, entry_time, exit_time, status, pass_reference
              FROM visitor_log_entries
              WHERE DATE(entry_time) = ? OR status = 'Inside campus'
@@ -483,14 +482,12 @@ if (PHP_SAPI !== 'cli') {
         if (!in_array($entrance, $entrances, true)) {
             $entrance = ENTRANCES[0];
         }
-        $submittedOcrText = $_POST['id_details'] ?? $_POST['visitor_id_text'] ?? '';
         $submittedVisitorName = $_POST['visitor_name'] ?? '';
         $submittedMobileNumber = $_POST['mobile_number'] ?? '';
         $submittedVisitorAddress = $_POST['visitor_address'] ?? '';
         $submittedDestination = $_POST['person_visited'] ?? $_POST['destination'] ?? '';
         $submittedPurpose = $_POST['purpose_of_visit'] ?? $_POST['purpose'] ?? '';
         $formData = [
-            'visitor_id_text' => is_string($submittedOcrText) ? trim($submittedOcrText) : '',
             'visitor_name' => is_string($submittedVisitorName) ? trim($submittedVisitorName) : '',
             'mobile_number' => is_string($submittedMobileNumber) ? trim($submittedMobileNumber) : '',
             'visitor_address' => is_string($submittedVisitorAddress) ? trim($submittedVisitorAddress) : '',
@@ -502,11 +499,6 @@ if (PHP_SAPI !== 'cli') {
             $entrance = (string) ($_POST['entrance'] ?? '');
             if (($_POST['action'] ?? '') !== 'check_in') {
                 fail(400, 'Choose a valid check-in action.');
-            }
-            if (!is_string($submittedOcrText)) {
-                $errors[] = 'Recognized ID text must be plain text.';
-            } elseif (strlen($formData['visitor_id_text']) > 65535) {
-                $errors[] = 'Recognized ID text must be 65 KB or fewer.';
             }
             if (!is_string($submittedVisitorName)) {
                 $errors[] = 'Visitor name must be plain text.';
@@ -521,6 +513,8 @@ if (PHP_SAPI !== 'cli') {
             }
             if (!is_string($submittedVisitorAddress)) {
                 $errors[] = 'Visitor address must be plain text.';
+            } elseif ($formData['visitor_address'] === '') {
+                $errors[] = 'Visitor address is required.';
             } elseif (strlen($formData['visitor_address']) > 500) {
                 $errors[] = 'Visitor address must be 500 characters or fewer.';
             }
@@ -533,22 +527,21 @@ if (PHP_SAPI !== 'cli') {
             if (!in_array($entrance, $entrances, true)) {
                 $errors[] = 'Choose a participating entrance.';
             }
-            if (($_POST['id_details_confirmed'] ?? '') !== 'yes') {
-                $errors[] = 'Confirm that you reviewed the visitor details and any OCR text against the physical ID.';
+            if (($_POST['visitor_details_confirmed'] ?? '') !== 'yes') {
+                $errors[] = 'Confirm that you reviewed the visitor details against the physical ID.';
             }
             if (!$errors) {
                 $statement = db()->prepare(
                     "INSERT INTO visitor_log_entries
-                     (pass_reference, visitor_name, mobile_number, visitor_address, visitor_id_text,
+                     (pass_reference, visitor_name, mobile_number, visitor_address,
                       destination, purpose, entrance_name, entry_guard_id, entry_time, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Inside campus')"
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Inside campus')"
                 );
                 $statement->execute([
                     create_pass_reference(),
                     $formData['visitor_name'],
                     $formData['mobile_number'] !== '' ? $formData['mobile_number'] : null,
-                    $formData['visitor_address'] !== '' ? $formData['visitor_address'] : null,
-                    $formData['visitor_id_text'] !== '' ? $formData['visitor_id_text'] : null,
+                    $formData['visitor_address'],
                     $formData['destination'],
                     $formData['purpose'],
                     $entrance,
@@ -606,8 +599,8 @@ if (PHP_SAPI !== 'cli') {
     if (preg_match('#^/guard/visits/(\d+)/pass$#', $path, $matches) && $method === 'GET') {
         require_login('Security Guard');
         $statement = db()->prepare(
-            'SELECT visit_id, pass_reference, visitor_name, visitor_id_text, destination, purpose,
-                    entrance_name, entry_time, status
+            'SELECT visit_id, visitor_name, destination, purpose,
+                    entrance_name, entry_time, exit_entrance_name, exit_time, status
              FROM visitor_log_entries WHERE visit_id = ?'
         );
         $statement->execute([(int) $matches[1]]);
@@ -615,7 +608,7 @@ if (PHP_SAPI !== 'cli') {
         if (!$visit) {
             fail(404, 'The visitor pass record could not be found.');
         }
-        render('visitor_pass', ['visit' => $visit, 'passPage' => true]);
+        render('visitor_pass', ['visit' => $visit]);
     }
 
     if ($path === '/guard/visitor-history' && $method === 'GET') {
@@ -691,7 +684,7 @@ if (PHP_SAPI !== 'cli') {
         ]);
         foreach (record_rows($filters, 0) as $record) {
             fputcsv($output, array_map('csv_safe', [
-                ($record['visitor_name'] ?? '') ?: 'ID details recorded',
+                ($record['visitor_name'] ?? '') ?: 'Name not recorded',
                 $record['mobile_number'] ?? '',
                 $record['destination'],
                 $record['purpose'],

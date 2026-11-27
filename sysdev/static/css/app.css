@@ -47,7 +47,7 @@ button, select { cursor: pointer; }
 }
 .brand { display: inline-flex; align-items: center; gap: 11px; color: white; font-weight: 700; font-size: 19px; letter-spacing: -.02em; }
 .brand:hover, .topnav a:hover { color: #d4e8fb; text-decoration: none; }
-.brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgb(255 255 255 / 27%); border-radius: 11px; background: rgb(33 138 120 / 36%); color: #d4fff2; font-size: 16px; }
+.brand-mark { width: 38px; height: 38px; display: block; flex: 0 0 auto; padding: 2px; border: 1px solid rgb(255 255 255 / 30%); border-radius: 11px; background: #fff; object-fit: contain; }
 .topnav { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .topnav a, .nav-button { color: #eef5fb; }
 .topnav > a, .nav-button { padding: 8px 11px; border-radius: 8px; }
@@ -119,9 +119,6 @@ input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--teal
 .pass-body .detail-grid { text-align: left; }
 .pass-body h2 { margin: 16px 0 4px; font-size: 25px; }
 .pass-body > p { color: var(--muted); }
-.qr-image { display: block; width: 220px; height: 220px; margin: 20px auto; image-rendering: pixelated; }
-#visitorQr { width: 220px; margin: 20px auto; }
-#visitorQr canvas, #visitorQr img { display: block; margin: 0 auto; }
 .badge { display: inline-flex; padding: 5px 10px; border-radius: 20px; background: #edf2f6; color: #536779; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .badge-awaiting-verification { background: #fff4d8; color: var(--amber); }
 .badge-inside-campus { background: #e4f1fb; color: var(--blue-dark); }
@@ -174,9 +171,6 @@ td small { margin-top: 4px; font-size: 11px; }
 .scanner-preview p { position: absolute; inset: auto 16px 10px; padding: 6px; border-radius: 4px; background: rgb(0 0 0 / 55%); color: white; font-size: 13px; }
 .scanner-preview video { display: block; min-height: 230px; }
 .scanner-card progress { width: 100%; margin-top: 12px; accent-color: var(--blue); }
-.ocr-text-label { display: grid; gap: 8px; margin-top: 12px; color: var(--ink); font-size: 13px; font-weight: 700; }
-.ocr-text-label textarea { width: 100%; min-height: 160px; font-family: Consolas, "Courier New", monospace; font-size: 13px; font-weight: 400; }
-.ocr-record-text { max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.45 Consolas, "Courier New", monospace; }
 .lookup-form { margin-bottom: 18px; padding: 20px; }
 .input-action { display: flex; gap: 8px; }
 .input-action input { flex: 1; }

@@ -45,8 +45,7 @@ $visits = isset($visits) && is_array($visits) ? $visits : [];
           <?php foreach ($visits as $visit): ?>
             <tr>
               <td>
-                <strong><?= h(($visit['visitor_name'] ?? '') ?: 'ID details recorded') ?></strong>
-                <?php if (!empty($visit['visitor_id_text'])): ?><details><summary>View saved OCR text</summary><pre class="ocr-record-text"><?= h($visit['visitor_id_text']) ?></pre></details><?php endif; ?>
+                <strong><?= h(($visit['visitor_name'] ?? '') ?: 'Name not recorded') ?></strong>
                 <?php if (!empty($visit['mobile_number'])): ?><small><?= h($visit['mobile_number']) ?></small><?php endif; ?>
                 <?php if (!empty($visit['visitor_address'])): ?><small><?= h($visit['visitor_address']) ?></small><?php endif; ?>
               </td>
